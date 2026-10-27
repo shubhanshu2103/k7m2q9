@@ -12,9 +12,10 @@ Target: about 9 minutes in total, each part under five minutes. Recording, uploa
    - **Use.** "This is what you could have acted on. No later run is ever used, and the export contains no actuals."
 3. **Point-in-time precision (40 s).** Set the cutoff to 11:30. The run used stays at 09:30, because the usual 11:30 run was only recorded at 12:25. Set 12:25 and it appears. Then open the shared link `?decision=2026-01-01&cutoff=01:00`: at 01:00 the 22:00–23:00 targets have no forecast yet, and the app leaves them blank rather than guessing.
 4. **Hindsight (50 s).** Click *Reveal actuals*. The banner turns amber. Show MAE 859 MW, bias +397 MW and the largest miss of +2,577 MW at 21:00. The error chart shows the evening over-forecast. Change the day: the app returns to the forecast-only view, so hindsight can't leak into the next decision.
-5. **Accuracy lab (90 s).** At 09:30 across all 31 days:
+5. **Accuracy lab (90 s).** Open on "What the pilot found", then at 09:30 across all 31 days:
    - **Headline.** MAE about 2,000 MW and bias +1,730 MW.
    - **Shortfall reading.** 84% of hours over-forecast, and in one hour in ten wind fell short of the forecast by more than about 4,100 MW. "That is the scale of error to keep in mind when deciding how much other generation you might need."
+   - **By forecast level.** When the forecast said 15 GW or more, it was too high in 98% of hours, by about 2.75 GW on average. "When the forecast is very windy, that is when to be most careful."
    - **Drill-through.** Click the worst day (delivery 28 January) to open its replay in hindsight.
    - **Cutoff sweep.** Waiting until midday lowers MAE by about 110 MW, but the bias barely moves.
    - **Track-record check.** We tested the track record before asking you to trust it. A bad week did not predict a bad next day, but the over-forecast was steady enough that simply subtracting it would have cut January's error by 14%. That is the first thing to investigate together.
@@ -40,6 +41,7 @@ Say plainly: this is GB transmission-metered wind. It does not use demand or pri
    - **`api.ts`.** Request results are bound to their path, superseded requests are aborted, and immutable responses are reused (metadata is fetched once).
    - **Screens.** Split by responsibility.
 5. **Delivery and limits (50 s).**
+   - **Practices.** CI enforces Ruff lint and format, Prettier, a locked Python dependency set, pytest, the audit, Playwright and a Docker smoke.
    - **Delivery.** Docker multistage with a non-root, read-only runtime, and the CI workflow. Say which CI run passed and on which commit.
    - **Limits.** Unknown dissemination lag and within-hour semantics, the January/GMT-only date contract, the unexplained bias, and no calibrated band, by design.
    - **Disclosure.** AI assistance as described in the README.

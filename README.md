@@ -7,7 +7,8 @@ A January 2026 wind-forecast workbench for a UK day-ahead purchasing team. It an
 - **Repository.** Public at https://github.com/shubhanshu2103/k7m2q9.
 - **First version.** GitHub Actions passed for commit `5276489`: [run 40538346465](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40538346465). That run covered pytest, the production build, Playwright, and a Docker image build with a container health/replay smoke.
 - **Second pass.** Pushed to branch `second-pass-decision-workbench`; GitHub Actions passed every step for commit `8f3746b`, including the Docker build and container smoke: [run 40546173350](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40546173350). `main` still points at the first version.
-- **Third pass.** The decision-time track record and its backtest, described below. Verified locally (see [Verify](#verify)); CI has not run on it until it is pushed.
+- **Third pass.** The decision-time track record and its backtest. Pushed; GitHub Actions passed every step for commit `58c2327`: [run 40549449242](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40549449242).
+- **Fourth pass.** Error by forecast level, a key findings summary, and enforced lint, formatting and locked Python dependencies. Verified locally (see [Verify](#verify)); CI runs once it is pushed.
 - **Still pending.** Vercel/Heroku deployment: **no deployed application link exists yet**. Also pending: the demo video and the form submission.
 
 ## Product
@@ -25,6 +26,8 @@ The app has three screens, and every scenario is kept in the URL so a view can b
   - The actual-comparison assumption is shown only where it has an effect.
 - **Accuracy lab: how wrong, where, and what to inspect next.** All 31 purchase days at one consistent cutoff.
   - **Headline metrics.** MAE, bias and RMSE, with paired n.
+  - **What the pilot found.** Four statements computed from the selected scenario, each linking to the panel that evidences it.
+  - **Error by forecast level.** MAE, bias, share over-forecast and a 90th-percentile shortfall for hours forecast under 5, 5–10, 10–15 and 15+ GW. The band is known at decision time; the errors are January hindsight.
   - **Shortfall summary.** How often, and by how much, wind came in below the as-of forecast (percentiles of signed error).
   - **Bad days.** Daily error chart with the five worst days. Clicking a bar or a listed day opens that exact replay in hindsight mode with the same cutoff and rule.
   - **Cutoff sweep.** "Would deciding later have helped?" across 24 hourly cutoffs, flagging cutoffs whose coverage is incomplete.
@@ -61,7 +64,7 @@ python -m venv .venv
 # Linux/macOS
 . .venv/bin/activate
 # Windows PowerShell instead: .venv\Scripts\Activate.ps1
-pip install -r requirements-dev.txt
+pip install -r requirements-dev.txt -c constraints.txt
 npm ci
 npm run build
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
@@ -73,6 +76,8 @@ For frontend development, run the Python command in one terminal and `npm run de
 ## Verify
 
 ```sh
+ruff check backend tests scripts && ruff format --check backend tests scripts
+npm run format:check
 python -m pytest -q
 npm run build
 npx playwright install chromium     # or set PW_CHROMIUM_PATH to an existing Chromium
@@ -80,7 +85,7 @@ npm run test:e2e
 python scripts/audit.py             # independent recomputation of the default month
 ```
 
-Observed for the current working tree, locally: **42 Python tests and 13 browser tests pass**, the strict TypeScript build passes and the independent audit reproduces the baseline numbers exactly. Browser tests start and stop their own backend on port 8000, so stop any local server first. No tests are skipped. Starlette's TestClient emits one deprecation warning; it does not fail the tests.
+Observed for the current working tree, locally: **44 Python tests (under both Python 3.12 with `constraints.txt` and 3.13) and 14 browser tests pass**, Ruff and Prettier checks are clean, the strict TypeScript build passes and the independent audit reproduces the baseline numbers exactly. Browser tests start and stop their own backend on port 8000, so stop any local server first. No tests are skipped. Starlette's TestClient emits one deprecation warning; it does not fail the tests.
 
 **Python tests cover:**
 - inclusive publication boundaries and exclusion of future versions
@@ -95,6 +100,7 @@ Observed for the current working tree, locally: **42 Python tests and 13 browser
 - CSV privacy and filenames
 - all 31 delivery days at seven cutoff scenarios
 - the late real January run, snapshot hashes, and pinned baseline metrics
+- forecast-level bands partitioning the paired hours, with the real January values pinned
 
 **Browser tests cover:**
 - the decision view and the delayed-run boundary
@@ -104,6 +110,7 @@ Observed for the current working tree, locally: **42 Python tests and 13 browser
 - a slow older request never overwriting a newer scenario
 - keyboard navigation and focus
 - metadata fetched once
+- key findings that follow the selected cutoff and link to their evidence
 - no page overflow at 320, 390 and 1440px
 - network-error retry
 - an empty-coverage view that never shows Infinity, NaN or fabricated accuracy
@@ -172,6 +179,17 @@ Actuals use the latest publishTime returned per startTime in the fixed snapshot.
 **Track-record backtest (09:30, hourly mean, 29 purchase days with a track record, 696 hours).**
 - **Not predictive day to day.** The correlation between the trailing seven-day bias and that day's bias is −0.40; for MAE it is −0.52. A poor week did not foreshadow a poor next day. The windows overlap and n is small, so this is weak evidence either way.
 - **Bias was steady.** Subtracting the trailing bias from every forecast would have lowered MAE from 1,969 to 1,689 MW (−14%). This is in-sample for one month, and the bias's cause is unknown, so it is a question for the client, not a recommended correction. The app never shows an adjusted forecast.
+
+**By forecast level (09:30, hourly mean).** The windier the forecast, the more it overstated wind:
+
+| Forecast | Hours | MAE MW | Bias MW | Over-forecast | 90th pct shortfall MW |
+|---|---|---|---|---|---|
+| < 5 GW | 31 | 1,298 | +136 | 52% | 1,734 |
+| 5–10 GW | 210 | 1,454 | +796 | 70% | 2,762 |
+| 10–15 GW | 206 | 1,596 | +1,447 | 85% | 2,833 |
+| ≥ 15 GW | 297 | 2,772 | +2,753 | 98% | 4,792 |
+
+This pattern is consistent with curtailment at high output, or with a fleet-scope difference that grows with output, but the data cannot distinguish them. The five worst days (16% of the month) carried 36% of all absolute error.
 
 **Cutoff sweep (hourly cutoffs, hourly mean).**
 - **MAE falls slowly** from about 2,070 MW (03:00) to 2,013 MW (10:00), 1,901 MW (12:00) and 1,825 MW (23:00).
@@ -242,10 +260,12 @@ docs/demo-outline.md           Customer and technical walkthrough script; not a 
 docs/verification.md           Observed checks and remaining unverified areas
 Dockerfile                     Multi-stage, non-root one-origin runtime
 compose.yaml                   Local container service and healthcheck
-.github/workflows/ci.yml       Python, React, browser, audit and Docker CI checks
+.github/workflows/ci.yml       Lint, format, Python, audit, React build, browser and Docker CI checks
 playwright.config.js           Browser test runner; optional PW_CHROMIUM_PATH
 package.json, package-lock.json      Frontend scripts and locked dependency graph
-requirements*.txt, pyproject.toml    Pinned direct Python dependencies and tool settings
+requirements*.txt              Direct Python dependencies (runtime, and dev tools)
+constraints.txt                Full resolved Python dependency set, used by CI and Docker
+pyproject.toml                 Ruff lint/format and pytest settings
 ```
 
 ## Design and operating limits
