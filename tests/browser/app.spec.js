@@ -281,3 +281,24 @@ test("decision view shows a track record built only from already-published actua
   await expect(check).toContainText("r = -0.40");
   await expect(check).toContainText("1,689");
 });
+
+test("Lab key findings are derived from the data and link to their evidence", async ({
+  page,
+}) => {
+  await page.goto("/?view=analysis&cutoff=09:30&rule=hour_mean");
+  const findings = page.getByRole("region", { name: "What the pilot found" });
+  await expect(findings.locator("li")).toHaveCount(4);
+  await expect(findings).toContainText("+1,730 MW on average");
+  await expect(findings).toContainText("84% of hours over-forecast");
+  await expect(findings).toContainText("the 5 worst days carried 36%");
+  await findings.getByRole("link", { name: "By forecast level" }).click();
+  const level = page.getByRole("region", {
+    name: "Does the miss depend on how windy the forecast was?",
+  });
+  await expect(level).toBeInViewport();
+  await expect(level.locator("tbody tr")).toHaveCount(4);
+  await expect(level.locator("tbody tr").last()).toContainText("98%");
+  // Findings follow the selected scenario rather than being hard-coded.
+  await page.locator("#cutoff").fill("12:00");
+  await expect(findings).not.toContainText("+1,730 MW on average");
+});

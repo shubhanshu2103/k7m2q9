@@ -251,3 +251,26 @@ def test_track_record_check_is_reported_with_sample_size():
     assert check["bias_correlation"] == pytest.approx(-0.3985, abs=1e-4)
     assert check["mae"] == pytest.approx(1969.13, abs=0.01)
     assert check["adjusted_mae"] == pytest.approx(1689.16, abs=0.01)
+
+
+def test_by_level_bands_partition_paired_points():
+    from backend.engine import by_level
+
+    points = [
+        {"forecast": 4999, "error": 10},
+        {"forecast": 5000, "error": -20},
+        {"forecast": 15000, "error": 30},
+        {"forecast": 20000, "error": None},
+    ]
+    bands = by_level(points)
+    assert [b["n"] for b in bands] == [1, 1, 0, 1]
+    assert bands[1]["bias"] == -20 and bands[2]["mae"] is None
+    assert bands[-1]["to_mw"] is None
+
+
+def test_snapshot_error_grows_with_forecast_level():
+    bands = Store().analysis("09:30", "hour_mean")["by_level"]
+    assert [b["n"] for b in bands] == [31, 210, 206, 297]
+    assert sum(b["n"] for b in bands) == 744
+    assert [round(b["bias"]) for b in bands] == [136, 796, 1447, 2753]
+    assert bands[-1]["share_over"] == pytest.approx(0.98, abs=0.005)

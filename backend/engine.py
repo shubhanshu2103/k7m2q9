@@ -20,6 +20,9 @@ FIRST_DECISION, LAST_DECISION = date(2026, 1, 1), date(2026, 1, 31)
 SWEEP_CUTOFFS = tuple(f"{h:02}:00" for h in range(24))
 # Earlier runs shown beside the selected one. Enough to see drift without a spaghetti chart.
 PRIOR_RUNS = 3
+# Forecast-level bands (MW) for the "does the miss depend on the forecast?" view. Round
+# numbers a buyer can read at a glance; each band reports its own n.
+LEVEL_BANDS = ((0, 5000), (5000, 10000), (10000, 15000), (15000, None))
 # Recent delivery days summarised in the decision view's track record.
 TRACK_DAYS = 7
 
@@ -115,6 +118,28 @@ def distribution(points: Iterable[dict]) -> dict:
         "abs_p90": quantile([abs(e) for e in errors], 0.9),
         "share_over": sum(e > 0 for e in errors) / len(errors) if errors else None,
     }
+
+
+def by_level(points: list[dict]) -> list[dict]:
+    """Paired errors grouped by the forecast's own level, which is known at decision time."""
+    out = []
+    for lo, hi in LEVEL_BANDS:
+        band = [
+            p
+            for p in points
+            if p.get("error") is not None and lo <= p["forecast"] and (hi is None or p["forecast"] < hi)
+        ]
+        d = distribution(band)
+        out.append(
+            {
+                "from_mw": lo,
+                "to_mw": hi,
+                **metrics(band),
+                "p90": d["p90"],
+                "share_over": d["share_over"],
+            }
+        )
+    return out
 
 
 @dataclass(frozen=True)
@@ -324,6 +349,7 @@ class Store:
             ],
             "hourly": hourly,
             "track_record_check": self._track_record_check(cutoff, rule, days),
+            "by_level": by_level(points),
         }
 
     def _track_record_check(self, cutoff: str, rule: str, days: list[dict]) -> dict:
