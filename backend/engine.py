@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone, date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Literal
-import json, math, re
+import json, math, re, statistics
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +20,8 @@ FIRST_DECISION, LAST_DECISION = date(2026, 1, 1), date(2026, 1, 31)
 SWEEP_CUTOFFS = tuple(f"{h:02}:00" for h in range(24))
 # Earlier runs shown beside the selected one. Enough to see drift without a spaghetti chart.
 PRIOR_RUNS = 3
+# Recent delivery days summarised in the decision view's track record.
+TRACK_DAYS = 7
 
 
 def timestamp(value: str) -> datetime:
@@ -164,11 +166,23 @@ class Store:
         self.analysis = lru_cache(maxsize=64)(self._analysis)
         self.cutoff_sweep = lru_cache(maxsize=4)(self._cutoff_sweep)
 
-    def _actual_for(self, t: str, rule: Rule) -> tuple[float | None, list[str]]:
-        a = self.actual.get(t)
+    def _actual_for(
+        self, t: str, rule: Rule, available_by: datetime | None = None
+    ) -> tuple[float | None, list[str]]:
+        """Actual for an hourly target. With available_by, a half-hour published later counts as
+        missing. The snapshot holds one version per half-hour, so an earlier, since-revised
+        version cannot be recovered; excluding it is the conservative choice."""
+
+        def get(start: str) -> dict | None:
+            r = self.actual.get(start)
+            if r and available_by and timestamp(r["publishTime"]) > available_by:
+                return None
+            return r
+
+        a = get(t)
         if rule == "first_half":
             return (a["generation"] if a else None), [a["publishTime"]] if a else []
-        b = self.actual.get(iso(timestamp(t) + timedelta(minutes=30)))
+        b = get(iso(timestamp(t) + timedelta(minutes=30)))
         value = (a["generation"] + b["generation"]) / 2 if a and b else None
         return value, [r["publishTime"] for r in (a, b) if r]
 
@@ -238,6 +252,41 @@ class Store:
             out["coverage"]["actual"] = sum(p["actual"] is not None for p in points)
         return out
 
+    def track_record(self, decision: str, cutoff: str = "09:30", rule: str = "hour_mean") -> dict:
+        """How this cutoff's forecasts fared on recent delivery days, using only actuals whose
+        publishTime is at or before this decision's cutoff. No hindsight: everything here was
+        published before the decision."""
+        sc = parse_scenario(decision, cutoff, rule)
+        days, points = [], []
+        d = sc.decision - timedelta(days=1)
+        while d >= FIRST_DECISION and len(days) < TRACK_DAYS:
+            past = self.replay(d.isoformat(), cutoff, rule)
+            paired = []
+            for p in past["points"]:
+                value, _ = self._actual_for(p["time"], sc.rule, available_by=sc.gate)
+                error = p["forecast"] - value if p["forecast"] is not None and value is not None else None
+                paired.append({**p, "actual": value, "error": error})
+            # Only complete days: a half-reported day would bias the summary towards the night.
+            if all(p["error"] is not None for p in paired):
+                days.append(
+                    {
+                        "decision_date": past["decision_date"],
+                        "delivery_date": past["delivery_date"],
+                        **metrics(paired),
+                    }
+                )
+                points += paired
+            d -= timedelta(days=1)
+        return {
+            "available_by": iso(sc.gate),
+            "window_days": TRACK_DAYS,
+            "days": days,
+            "metrics": metrics(points),
+            "hourly_bias": [
+                metrics([p for p in points if p["hour"] == f"{h:02}:00"])["bias"] for h in range(24)
+            ],
+        }
+
     def _month(self, cutoff: str, rule: str) -> list[dict]:
         return [
             self.replay(d.isoformat(), cutoff, rule, True)
@@ -274,6 +323,42 @@ class Store:
                 for d in days
             ],
             "hourly": hourly,
+            "track_record_check": self._track_record_check(cutoff, rule, days),
+        }
+
+    def _track_record_check(self, cutoff: str, rule: str, days: list[dict]) -> dict:
+        """Retrospective test of whether the decision-time track record was a useful guide.
+
+        For each purchase day with a track record, compare it with how that day turned out,
+        and backtest the naive adjustment "subtract the recent bias". Everything used for the
+        adjustment was published before that day's cutoff, so the backtest has no look-ahead.
+        """
+        pairs, raw, adjusted = [], [], []
+        for d in days:
+            record = self.track_record(d["decision_date"], cutoff, rule)["metrics"]
+            if not record["n"] or d["metrics"]["n"] == 0:
+                continue
+            pairs.append((record, d["metrics"]))
+            for p in d["points"]:
+                if p["error"] is not None:
+                    raw.append(abs(p["error"]))
+                    adjusted.append(abs(p["error"] - record["bias"]))
+
+        def corr(key: str) -> float | None:
+            if len(pairs) < 3:
+                return None
+            try:
+                return statistics.correlation([r[key] for r, _ in pairs], [d[key] for _, d in pairs])
+            except statistics.StatisticsError:
+                return None
+
+        return {
+            "days": len(pairs),
+            "bias_correlation": corr("bias"),
+            "mae_correlation": corr("mae"),
+            "n": len(raw),
+            "mae": sum(raw) / len(raw) if raw else None,
+            "adjusted_mae": sum(adjusted) / len(adjusted) if adjusted else None,
         }
 
     def _cutoff_sweep(self, rule: str = "hour_mean") -> dict:

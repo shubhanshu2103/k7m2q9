@@ -34,7 +34,10 @@ def replay(
     rule: str = "hour_mean",
     reveal: bool = False,
 ):
-    return evaluate(store.replay, decision, cutoff, rule, reveal)
+    out = evaluate(store.replay, decision, cutoff, rule, reveal)
+    # Built only from actuals published before the cutoff, so it belongs in the decision view.
+    out["track_record"] = store.track_record(decision, cutoff, rule)
+    return out
 
 
 @app.get("/api/analysis")

@@ -14,7 +14,13 @@ import {
   YAxis,
 } from "recharts";
 import { ArrowUpRight, Download, Eye, EyeOff, LockKeyhole } from "lucide-react";
-import { query, useApi, type Point, type Replay } from "../api";
+import {
+  query,
+  useApi,
+  type Point,
+  type Replay,
+  type TrackRecord,
+} from "../api";
 import type { Scenario } from "../scenario";
 import {
   COLORS,
@@ -403,6 +409,8 @@ function ReplayBody({
 
       {reveal && <ErrorByHour points={points} />}
 
+      <TrackRecordPanel record={replay.track_record} onChange={onChange} />
+
       <section className="below-chart">
         <div className="panel vintage">
           <div className="panel-head">
@@ -526,6 +534,135 @@ function ReplayBody({
         </div>
       </details>
     </>
+  );
+}
+
+function TrackRecordPanel({
+  record,
+  onChange,
+}: {
+  record: TrackRecord;
+  onChange: Props["onChange"];
+}) {
+  const m = record.metrics;
+  const hourly = record.hourly_bias.map((bias, h) => ({
+    hour: `${String(h).padStart(2, "0")}:00`,
+    bias,
+  }));
+  return (
+    <section className="panel track" aria-labelledby="track-title">
+      <div className="panel-head">
+        <div>
+          <span className="eyebrow">Known at decision time</span>
+          <h2 id="track-title">How this cutoff's forecasts fared recently</h2>
+          <p>
+            {record.days.length === record.window_days
+              ? `The last ${record.window_days} delivery days`
+              : `Only ${record.days.length} complete delivery day${record.days.length === 1 ? "" : "s"} (of up to ${record.window_days})`}{" "}
+            whose actuals were all published by {stamp(record.available_by)},
+            each scored against the forecast selected at the same cutoff on its
+            own purchase day.
+          </p>
+        </div>
+      </div>
+      {record.days.length === 0 ? (
+        <p className="track-empty">
+          No complete delivery day had been published by this cutoff. The
+          snapshot's actuals start on 2 January, so the first purchase days have
+          no track record.
+        </p>
+      ) : (
+        <div className="track-body">
+          <dl className="track-values">
+            <div>
+              <dt>Recent MAE</dt>
+              <dd>
+                {fmt(m.mae)} <small>MW · n={m.n}</small>
+              </dd>
+            </div>
+            <div>
+              <dt>Recent bias</dt>
+              <dd>
+                {signed(m.bias)}{" "}
+                <small>MW · {m.bias == null ? "" : errorWord(m.bias)}</small>
+              </dd>
+            </div>
+          </dl>
+          <figure className="mini-figure">
+            <figcaption>
+              Recent bias by delivery hour, MW (above zero: forecast too high)
+            </figcaption>
+            <div
+              className="chart mini"
+              role="img"
+              aria-label="Recent mean bias by delivery hour."
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={hourly}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid vertical={false} stroke="#e6e7e5" />
+                  <XAxis
+                    dataKey="hour"
+                    minTickGap={28}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis
+                    width={52}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => fmt(v)}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <ReferenceLine y={0} stroke="#4a4547" />
+                  <Tooltip
+                    formatter={(v) => [
+                      `${signed(Number(v))} MW (${errorWord(Number(v))})`,
+                      "Recent bias",
+                    ]}
+                    labelFormatter={(l) => `${l} UTC`}
+                  />
+                  <Bar dataKey="bias" isAnimationActive={false}>
+                    {hourly.map((h) => (
+                      <Cell
+                        key={h.hour}
+                        fill={(h.bias ?? 0) >= 0 ? COLORS.over : COLORS.under}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </figure>
+          <ul className="track-days" aria-label="Days in the track record">
+            {record.days.map((d) => (
+              <li key={d.delivery_date}>
+                <strong>{weekdayLabel(d.delivery_date)}</strong>
+                <span>
+                  MAE {fmt(d.mae)} · bias {signed(d.bias)} MW
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="chart-foot">
+        <span>
+          Context, not a prediction or a correction. In January a poor recent
+          week did not foreshadow a poor next day.{" "}
+          <button
+            type="button"
+            className="link"
+            onClick={() => onChange({ view: "analysis" })}
+          >
+            See the check in the Accuracy lab
+          </button>
+        </span>
+      </p>
+    </section>
   );
 }
 

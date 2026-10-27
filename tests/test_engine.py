@@ -190,3 +190,64 @@ def test_default_month_baseline_is_unchanged():
     assert a["sensitivity"]["mae"] == pytest.approx(1995.57, abs=0.01)
     assert a["distribution"]["n"] == 744
     assert a["distribution"]["p10"] <= a["distribution"]["p50"] <= a["distribution"]["p90"]
+
+
+def _day_fixture(late_start=None, late_publish="2026-01-03T09:31:00Z"):
+    """Forecasts for delivery 2 Jan (published 1 Jan 09:00) and its 48 actual half-hours,
+    each published 30 minutes after it starts, except optionally one published late."""
+    from datetime import datetime, timedelta, timezone
+
+    start = datetime(2026, 1, 2, tzinfo=timezone.utc)
+    wind = [
+        row(t=(start + timedelta(hours=h)).isoformat(), p="2026-01-01T09:00:00Z", g=100)
+        for h in range(24)
+    ]
+    actual = []
+    for i in range(48):
+        t = start + timedelta(minutes=30 * i)
+        published = (t + timedelta(minutes=30)).isoformat()
+        if t.isoformat() == late_start:
+            published = late_publish
+        actual.append(row(t=t.isoformat(), p=published, g=40, fuel="WIND"))
+    return Store(wind, actual)
+
+
+def test_track_record_uses_only_complete_days_published_before_cutoff():
+    record = _day_fixture().track_record("2026-01-03", "09:30")
+    assert [d["delivery_date"] for d in record["days"]] == ["2026-01-02"]
+    assert record["metrics"]["n"] == 24 and record["metrics"]["bias"] == 60
+    assert record["hourly_bias"][0] == 60
+    # Delivery 3 Jan is still under way at the cutoff, so it never enters the record.
+    assert all(d["delivery_date"] < "2026-01-03" for d in record["days"])
+
+
+def test_track_record_excludes_actual_published_after_cutoff():
+    store = _day_fixture(late_start="2026-01-02T12:30:00+00:00")
+    assert store.track_record("2026-01-03", "09:30")["days"] == []
+    assert store.track_record("2026-01-03", "09:30")["metrics"]["mae"] is None
+    # Inclusive boundary: published exactly at the cutoff counts.
+    assert len(store.track_record("2026-01-03", "09:31")["days"]) == 1
+
+
+def test_snapshot_track_record_is_point_in_time():
+    s = Store()
+    assert s.track_record("2026-01-02", "09:30")["days"] == []
+    assert [d["delivery_date"] for d in s.track_record("2026-01-03", "09:30")["days"]] == [
+        "2026-01-02"
+    ]
+    for decision in ["2026-01-15", "2026-01-31"]:
+        record = s.track_record(decision, "09:30")
+        gate = timestamp(record["available_by"])
+        assert len(record["days"]) == 7
+        for d in record["days"]:
+            out = s.replay(d["decision_date"], "09:30", reveal=True)
+            published = [timestamp(t) for p in out["points"] for t in p["actual_publishTimes"]]
+            assert max(published) <= gate
+
+
+def test_track_record_check_is_reported_with_sample_size():
+    check = Store().analysis("09:30", "hour_mean")["track_record_check"]
+    assert check["days"] == 29 and check["n"] == 696
+    assert check["bias_correlation"] == pytest.approx(-0.3985, abs=1e-4)
+    assert check["mae"] == pytest.approx(1969.13, abs=0.01)
+    assert check["adjusted_mae"] == pytest.approx(1689.16, abs=0.01)

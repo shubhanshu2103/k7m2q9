@@ -240,3 +240,44 @@ test("empty eligible forecast set stays blank, never Infinity or zero accuracy",
     /\bNaN\b|Infinity/,
   );
 });
+
+test("decision view shows a track record built only from already-published actuals", async ({
+  page,
+}) => {
+  await page.goto(
+    "/?view=replay&decision=2026-01-15&cutoff=09:30&rule=hour_mean&reveal=0",
+  );
+  const track = page.getByRole("region", {
+    name: "How this cutoff's forecasts fared recently",
+  });
+  await expect(track).toContainText("The last 7 delivery days");
+  await expect(track).toContainText("2026-01-15 09:30 UTC");
+  await expect(track.locator(".track-days li")).toHaveCount(7);
+  await expect(track.locator(".track-days li").first()).toContainText(
+    "Wed 14 Jan",
+  );
+  // Still the decision view: no actual line or current-day error.
+  await expect(mode(page)).toContainText("Decision view");
+  await expect(page.locator(".key.actual")).toHaveCount(0);
+
+  await page.goto(
+    "/?view=replay&decision=2026-01-02&cutoff=09:30&rule=hour_mean&reveal=0",
+  );
+  await expect(
+    page.getByText(
+      "No complete delivery day had been published by this cutoff",
+    ),
+  ).toBeVisible();
+
+  await page.goto(
+    "/?view=replay&decision=2026-01-15&cutoff=09:30&rule=hour_mean&reveal=0",
+  );
+  await track
+    .getByRole("button", { name: "See the check in the Accuracy lab" })
+    .click();
+  const check = page.getByRole("region", {
+    name: "Was the recent track record a useful guide?",
+  });
+  await expect(check).toContainText("r = -0.40");
+  await expect(check).toContainText("1,689");
+});

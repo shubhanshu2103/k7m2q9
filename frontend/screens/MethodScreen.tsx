@@ -77,6 +77,12 @@ function Method({ meta }: { meta: Meta }) {
             in this snapshot, not actuals available at the cutoff.
           </li>
           <li>
+            <strong>Use only what was published.</strong> The decision view's
+            track record scores earlier delivery days using actual half-hours
+            whose own publishTime is at or before the cutoff. Days not yet fully
+            published are skipped, never partially averaged.
+          </li>
+          <li>
             <strong>Summarise honestly.</strong> MAE, bias and RMSE use paired
             hours only and always report n. Percentiles of signed error describe
             January at one cutoff; they are not a calibrated interval. MAPE is

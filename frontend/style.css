@@ -887,6 +887,75 @@ header {
   letter-spacing: 0;
 }
 
+/* Track record */
+.track-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 16px 24px;
+  padding: 16px 24px 8px;
+  align-items: start;
+}
+.track-values {
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+.track-values dt {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.track-values dd {
+  margin: 2px 0 0;
+  font-family: Manrope, system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+.track-values small {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--ink-3);
+}
+.check .shortfall-values > div:nth-child(2) {
+  border-left-color: var(--line);
+}
+.mini-figure {
+  margin: 0;
+  min-width: 0;
+}
+.mini-figure figcaption {
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+.chart.mini {
+  height: 170px;
+  padding: 0;
+}
+.track-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.track-days li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.track-days span {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.track-empty {
+  padding: 14px 24px 18px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
 /* Tables */
 .details summary {
   cursor: pointer;
@@ -1118,6 +1187,12 @@ footer {
     grid-template-columns: 1fr;
     gap: 0;
   }
+  .track-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  }
+  .track-days {
+    grid-column: 1 / -1;
+  }
 }
 @media (max-width: 760px) {
   .app {
@@ -1257,6 +1332,16 @@ footer {
   }
   .fine-print {
     margin: 14px 16px 18px;
+  }
+  .track-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px 16px 4px;
+  }
+  .track-days li {
+    flex-wrap: wrap;
+  }
+  .track-empty {
+    padding: 12px 16px 16px;
   }
   .lesson,
   .shortfall,

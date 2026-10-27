@@ -66,3 +66,12 @@ def test_decision_export_never_contains_retrospective_values():
     body = client.get("/api/export?decision=2026-01-27").text
     assert len(body.splitlines()) == 25
     assert all(len(line.split(",")) == 10 for line in body.splitlines())
+
+
+def test_decision_replay_carries_track_record_but_no_current_actuals():
+    body = client.get("/api/replay?decision=2026-01-15").json()
+    assert len(body["track_record"]["days"]) == 7
+    assert "metrics" not in body
+    assert all("actual" not in p and "error" not in p for p in body["points"])
+    header = client.get("/api/export?decision=2026-01-15").text.splitlines()[0]
+    assert "track" not in header and "actual" not in header

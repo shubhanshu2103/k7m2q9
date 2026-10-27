@@ -271,6 +271,8 @@ function AnalysisBody({
 
       <CutoffSweep scenario={scenario} current={a} />
 
+      <TrackRecordCheck check={a.track_record_check} cutoff={scenario.cutoff} />
+
       <section className="panel sensitivity">
         <div>
           <span className="eyebrow">Temporal sensitivity</span>
@@ -528,6 +530,75 @@ function CutoffSweep({
           );
         }}
       </Loadable>
+    </section>
+  );
+}
+
+function TrackRecordCheck({
+  check: c,
+  cutoff,
+}: {
+  check: Analysis["track_record_check"];
+  cutoff: string;
+}) {
+  const change =
+    c.mae != null && c.adjusted_mae != null
+      ? (c.adjusted_mae - c.mae) / c.mae
+      : null;
+  return (
+    <section className="panel shortfall check" aria-labelledby="check-title">
+      <div>
+        <span className="eyebrow">Backtest · no look-ahead</span>
+        <h2 id="check-title">Was the recent track record a useful guide?</h2>
+        <p>
+          The decision view shows how forecasts at {cutoff} fared over the
+          previous week, using only actuals published before each cutoff. Here
+          we test that context against how each January day actually turned out
+          ({c.days} purchase days with a track record).
+        </p>
+      </div>
+      <dl className="shortfall-values">
+        <div>
+          <dt>Recent bias vs that day's bias</dt>
+          <dd>
+            r = {fmt(c.bias_correlation, 2)}{" "}
+            <small>Pearson correlation, {c.days} days</small>
+          </dd>
+        </div>
+        <div>
+          <dt>Recent MAE vs that day's MAE</dt>
+          <dd>
+            r = {fmt(c.mae_correlation, 2)}{" "}
+            <small>Pearson correlation, {c.days} days</small>
+          </dd>
+        </div>
+        <div>
+          <dt>MAE as published</dt>
+          <dd>
+            {fmt(c.mae)} <small>MW over {c.n} hours</small>
+          </dd>
+        </div>
+        <div>
+          <dt>If the recent bias were subtracted</dt>
+          <dd>
+            {fmt(c.adjusted_mae)}{" "}
+            <small>
+              MW
+              {change != null &&
+                ` (${change < 0 ? "−" : "+"}${Math.abs(Math.round(change * 100))}%)`}
+            </small>
+          </dd>
+        </div>
+      </dl>
+      <p className="fine-print wide">
+        A poor week did not predict a poor day: day-to-day error is
+        weather-driven and the correlations here are not positive. The
+        persistent over-forecast was steady enough that a naive bias adjustment
+        would have lowered January's error, but this is one month, the cause of
+        the bias is unknown (forecast, curtailment or fleet scope), and
+        overlapping windows make the sample small. Treat it as a question to
+        investigate with the client, not a correction to apply.
+      </p>
     </section>
   );
 }
