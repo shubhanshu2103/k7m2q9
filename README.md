@@ -274,6 +274,18 @@ The brief requires:
 
 **Deployed application link: pending, not yet deployed.** There is no placeholder URL. The video and form submission are also pending.
 
+**Candidate route: Vercel (not yet verified).** Heroku no longer has a free tier, so Vercel's Hobby plan is the likely no-cost option. This environment's network policy blocks `vercel.com`, so the points below come from search-result summaries of Vercel's FastAPI guide and Python runtime docs, not from reading them directly:
+- **Entrypoint.** Vercel detects a FastAPI instance named `app` in a recognised entry file (such as `app.py`, `index.py` or `main.py` at the root or under `api/`, `app/` or `src/`), or in the module set by `tool.vercel.entrypoint` in `pyproject.toml`. Our app lives at `backend.app:app`.
+- **Static assets.** These are served from `public/` by Vercel's CDN.
+- **Python.** 3.12 is the default runtime.
+
+Open questions to settle against the live docs before deploying:
+- whether the Vite build runs in the same project, or `dist/` must be emitted into `public/`
+- whether `data/*.json` (about 2.5 MB) is bundled with the function
+- the function size and duration limits on Hobby
+
+Locally, importing the app and loading the snapshot takes about 0.44 s, which is the cold-start cost to expect. Analysis and the cutoff sweep compute on first request (about 0.45 s and 1.1 s), then cache per instance.
+
 The Docker `PORT` contract prepares a container-hosted route; it does not prove provider eligibility, free capacity or compatibility. Verify the chosen provider's current runtime and plan rules before deploying, and do not assume Heroku is free. Open every submitted URL in a private/incognito window before submission.
 
 ## AI disclosure
