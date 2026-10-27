@@ -47,15 +47,15 @@ Scroll to the track record panel.
 
 > "And this is how forecasts at this same time of day fared over the last week: about 2,300 megawatts off on average, and consistently too high. Every actual behind that number was already published before 09:30. Nothing here is hindsight."
 
-**1:25 – Point-in-time precision (40 s).** Change the cutoff to 11:30, then to 12:25.
+**1:25 – Watch the forecast arrive (40 s).** Scroll up to the timeline and press *Play the day*. Let it run to 12:25, then press *Pause*.
 
-> "Precision matters. Move the decision to 11:30: we still use the 09:30 run, because that day the usual 11:30 run was only published at 12:25. At 12:25 it appears."
+> "This is the whole day of publications. Press play and you watch the forecast for tomorrow change as each run lands. Notice there is no 11:30 stop: that day the usual 11:30 run was only published at 12:25, so a buyer deciding at 11:30 still had the 09:30 forecast."
 
 Switch to Tab 2.
 
 > "And if you decided at 1 a.m. on New Year's Day, the last two hours of tomorrow had no forecast yet. We leave them blank instead of guessing."
 
-**2:05 – Reveal what happened (35 s).** Back to Tab 1 and set the cutoff to 09:30. Click *Reveal actuals*.
+**2:05 – Reveal what happened (35 s).** Back to Tab 1 and click the *09:30* stop. Click *Reveal actuals*.
 
 > "Now we look back. The banner turns amber: this is hindsight. Tomorrow's forecast was off by about 860 megawatts on average, and at 9 p.m. it was 2,600 too high: less wind arrived than promised."
 
@@ -73,9 +73,13 @@ Read the four findings, pointing at each.
 
 > "Two: the windier the forecast, the bigger the overstatement. Above 15 gigawatts it was too high 98% of the time. So when the forecast is very windy, that is when to be most careful."
 
-Click *Worst days*, then the top *Replay* button.
+Scroll to the heatmap.
 
-> "Three: a few days dominate. The five worst carried over a third of all error. One click opens any of them: on the 28th, every single hour was over-forecast by more than 4 gigawatts."
+> "Three: a few days dominate. This is every hour of the month: red is too high, blue too low. The solid red rows are whole days the forecast got wrong, and the five worst carried over a third of all error."
+
+Click *28 Jan* in the heatmap.
+
+> "One click opens any of them: on the 28th, every single hour was over-forecast by more than 4 gigawatts."
 
 Press Back. *Optional:* scroll to the cutoff chart: "Deciding later helps only a little: about 110 megawatts by midday."
 

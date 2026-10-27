@@ -15,6 +15,16 @@ These results apply to that commit only. The second pass does not inherit them.
 
 Pushed to `second-pass-decision-workbench`. GitHub Actions [run 40546173350](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40546173350) on commit `8f3746b` passed every step on Python 3.12 and Ubuntu: pytest (37), the audit, the production build, Playwright (12), the Docker image build, and the container health and replay smoke. This resolves the local Docker gap noted below.
 
+## Fifth pass (local, 27 October 2026)
+
+- **Checks.** 46 pytest and 16 Playwright pass; Ruff, Prettier and the strict build pass. New Python tests check that `day_runs` lists purchase-day publications only (no forecast values after the cutoff reach the decision response) and that the analysis `grid` matches the per-day points, including gaps at a 01:00 cutoff.
+- **A bug the tests caught.** The first version of the timeline reused the class name `.track`, which the track-record panel also uses. That panel collapsed to 8 px and its content overlapped the sections below. The responsive browser test failed because the overlapped summary could not be clicked. I renamed the timeline classes, and the responsive test now also asserts that every panel renders taller than 40 px.
+- **Visual inspection.** Timeline and heatmap were checked at 1440 and 320 px, and playback was checked to advance through the runs. Fixed after review: Play now always starts the day from 00:00. Screenshot capture now requests reduced motion, so charts are not caught mid-animation.
+
+## Fourth pass in CI
+
+Merged through [shubhanshu2103/k7m2q9#3](https://github.com/shubhanshu2103/k7m2q9/pull/3). CI passed on the branch ([run 40551431752](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40551431752)) and on `main` ([run 40551629743](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40551629743)), including Docker with `constraints.txt`.
+
 ## Fourth pass (local, 27 October 2026)
 
 - **Python.** 44 pytest pass under Python 3.13 and, in a clean venv installed with `-c constraints.txt`, under Python 3.12. New tests cover forecast-level bands partitioning paired hours, and the real band values.

@@ -8,7 +8,8 @@ A January 2026 wind-forecast workbench for a UK day-ahead purchasing team. It an
 - **First version.** GitHub Actions passed for commit `5276489`: [run 40538346465](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40538346465). That run covered pytest, the production build, Playwright, and a Docker image build with a container health/replay smoke.
 - **Second pass.** Pushed to branch `second-pass-decision-workbench`; GitHub Actions passed every step for commit `8f3746b`, including the Docker build and container smoke: [run 40546173350](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40546173350). `main` still points at the first version.
 - **Third pass.** The decision-time track record and its backtest. Pushed; GitHub Actions passed every step for commit `58c2327`: [run 40549449242](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40549449242).
-- **Fourth pass.** Error by forecast level, a key findings summary, and enforced lint, formatting and locked Python dependencies. Verified locally (see [Verify](#verify)); CI runs once it is pushed.
+- **Fourth pass.** Error by forecast level, a key findings summary, and enforced lint, formatting and locked Python dependencies. Merged into `main` through [shubhanshu2103/k7m2q9#3](https://github.com/shubhanshu2103/k7m2q9/pull/3); CI passed on `main` ([run 40551629743](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40551629743)).
+- **Fifth pass.** The cutoff timeline with playback, and the month heatmap. Verified locally (see [Verify](#verify)); CI runs once it is pushed.
 - **Still pending.** Vercel/Heroku deployment: **no deployed application link exists yet**. Also pending: the demo video and the form submission.
 
 ## Product
@@ -19,6 +20,7 @@ The app has three screens, and every scenario is kept in the URL so a view can b
   - **Forecast used.** The 24 hourly forecasts for the next UK day, chosen per target from runs published at or before the cutoff.
   - **Provenance.** The run used, its age and lead times, and which targets have no eligible forecast. Missing targets are left blank.
   - **Earlier runs and revision.** Up to three earlier eligible runs are drawn beside the chosen one, with the mean and largest change since the previous run. A buyer can see whether the outlook was moving, with no hindsight.
+  - **Watch the forecast arrive.** A timeline of the purchase day with a stop at every forecast run published that day. Step through it, or press *Play the day* to watch the chart reshape as each run lands. The selection can only change at a publication, so these are the cutoffs that matter. It shows publication *times* of later runs, never their values. Motion is skipped when the system asks for reduced motion.
   - **Track record known at decision time.** How forecasts at the same cutoff fared over the last seven complete delivery days: MAE, bias, bias by hour and each day. It counts only actuals whose own `publishTime` is at or before the cutoff, so it was genuinely knowable when deciding. It is labelled as context, not a prediction or a correction.
   - **Export.** The decision export contains no actuals.
 - **Hindsight is a separate, labelled mode.** "Reveal actuals" switches to an amber *Hindsight view* with MAE, signed bias, the largest miss and a per-hour error chart.
@@ -29,6 +31,7 @@ The app has three screens, and every scenario is kept in the URL so a view can b
   - **What the pilot found.** Four statements computed from the selected scenario, each linking to the panel that evidences it.
   - **Error by forecast level.** MAE, bias, share over-forecast and a 90th-percentile shortfall for hours forecast under 5, 5–10, 10–15 and 15+ GW. The band is known at decision time; the errors are January hindsight.
   - **Shortfall summary.** How often, and by how much, wind came in below the as-of forecast (percentiles of signed error).
+  - **The month at a glance.** A heatmap of every delivery hour (31 days × 24 hours) coloured by over- or under-forecast, with missing pairs hatched rather than shown as zero. Selecting a day opens its replay.
   - **Bad days.** Daily error chart with the five worst days. Clicking a bar or a listed day opens that exact replay in hindsight mode with the same cutoff and rule.
   - **Cutoff sweep.** "Would deciding later have helped?" across 24 hourly cutoffs, flagging cutoffs whose coverage is incomplete.
   - **Track-record backtest.** "Was the recent track record a useful guide?" Compares each day's track record with how that day turned out, and backtests a naive "subtract the recent bias" adjustment. Nothing used is published after the cutoff.
@@ -85,7 +88,7 @@ npm run test:e2e
 python scripts/audit.py             # independent recomputation of the default month
 ```
 
-Observed for the current working tree, locally: **44 Python tests (under both Python 3.12 with `constraints.txt` and 3.13) and 14 browser tests pass**, Ruff and Prettier checks are clean, the strict TypeScript build passes and the independent audit reproduces the baseline numbers exactly. Browser tests start and stop their own backend on port 8000, so stop any local server first. No tests are skipped. Starlette's TestClient emits one deprecation warning; it does not fail the tests.
+Observed for the current working tree, locally: **46 Python tests and 16 browser tests pass**, Ruff and Prettier checks are clean, the strict TypeScript build passes and the independent audit reproduces the baseline numbers exactly. Browser tests start and stop their own backend on port 8000, so stop any local server first. No tests are skipped. Starlette's TestClient emits one deprecation warning; it does not fail the tests.
 
 **Python tests cover:**
 - inclusive publication boundaries and exclusion of future versions
@@ -111,6 +114,9 @@ Observed for the current working tree, locally: **44 Python tests (under both Py
 - keyboard navigation and focus
 - metadata fetched once
 - key findings that follow the selected cutoff and link to their evidence
+- the cutoff timeline: run stops (including the delayed 12:25 run), stepping, leaving hindsight on a new stop, play from 00:00 and pause
+- the heatmap: all 744 cells, five highlighted worst days, drill-through, and 62 gaps at a 01:00 cutoff
+- every panel rendering at a real height, which guards against CSS class collisions
 - no page overflow at 320, 390 and 1440px
 - network-error retry
 - an empty-coverage view that never shows Infinity, NaN or fabricated accuracy
@@ -213,9 +219,9 @@ Refresh intentionally replaces the snapshot. After review, commit the new respon
 - `GET /api/health`
 - `GET /api/meta`: counts, per-day provenance and the snapshot manifest.
 - `GET /api/replay?decision=2026-01-15&cutoff=11:30&rule=hour_mean&reveal=false`
-  - Returns 24 points with `forecast`, `publishTime`, `fallback` and `age_hours`, plus `coverage`, `prior_runs` and `track_record` (built only from actuals published at or before the cutoff).
+  - Returns 24 points with `forecast`, `publishTime`, `fallback` and `age_hours`, plus `coverage`, `prior_runs`, `day_runs` (publication times only, for the timeline) and `track_record` (built only from actuals published at or before the cutoff).
   - With `reveal=true` it also returns `actual`, `actual_publishTimes`, `error`, `metrics` and actual coverage. With `reveal=false` these are absent.
-- `GET /api/analysis?cutoff=09:30&rule=hour_mean`: month metrics, `distribution`, rule sensitivity, per-day and per-hour metrics, and `track_record_check`.
+- `GET /api/analysis?cutoff=09:30&rule=hour_mean`: month metrics, `distribution`, rule sensitivity, per-day and per-hour metrics, `grid` (signed error per day and hour, null when unpaired), `by_level` and `track_record_check`.
 - `GET /api/cutoff-sweep?rule=hour_mean`: month MAE, bias, RMSE, paired n, forecast coverage and mean forecast age for each hourly cutoff 00:00–23:00.
 - `GET /api/export`: same parameters as replay. Returns CSV named by day, cutoff and view, e.g. `wind-replay-2026-01-15-0930-decision.csv`. Hidden actuals remain absent from the decision export.
 - `GET /docs`: generated API reference.
@@ -242,6 +248,8 @@ frontend/ui.tsx                Shared stat, notice, loading/error and control co
 frontend/screens/ReplayScreen.tsx    Decision/hindsight replay
 frontend/screens/AnalysisScreen.tsx  Accuracy lab, drill-through and cutoff sweep
 frontend/screens/MethodScreen.tsx    Data, method and provenance
+frontend/screens/CutoffTimeline.tsx  Run-publication timeline with step and playback
+frontend/screens/ErrorHeatmap.tsx    Day × hour error heatmap
 frontend/style.css             Tokenised responsive styles
 scripts/snapshot.py            Explicit bounded Elexon snapshot acquisition
 scripts/audit.py               Independent numerical cross-check
