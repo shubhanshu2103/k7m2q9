@@ -124,3 +124,69 @@ def test_snapshot_counts_and_integrity():
     assert all(d["rows"] == 48 for d in m["actual_days"])
     for name, src in m["manifest"]["sources"].items():
         assert hashlib.sha256(Path(f"data/{name}.json").read_bytes()).hexdigest() == src["sha256"]
+
+
+def test_quantile_and_distribution():
+    from backend.engine import quantile, distribution
+
+    assert quantile([], 0.5) is None
+    assert quantile([3, 1, 2], 0.5) == 2
+    assert quantile([0, 10], 0.9) == pytest.approx(9)
+    d = distribution([{"error": e} for e in [-10, 0, 10, 20]] + [{"error": None}])
+    assert d["n"] == 4 and d["share_over"] == 0.5 and d["abs_p90"] == pytest.approx(17)
+    assert distribution([])["p90"] is None and distribution([])["share_over"] is None
+
+
+def test_prior_runs_are_eligible_older_and_exclude_selected():
+    rs = [
+        row(p="2026-01-01T07:30:00Z", g=80),
+        row(p="2026-01-01T04:30:00Z", g=60),
+        row(p="2026-01-01T09:30:00Z", g=100),
+        row(p="2026-01-01T09:31:00Z", g=999),  # after cutoff: must never appear
+    ]
+    out = Store(rs, []).replay("2026-01-01", "09:30")
+    assert [r["publishTime"] for r in out["prior_runs"]] == [
+        "2026-01-01T07:30:00Z",
+        "2026-01-01T04:30:00Z",
+    ]
+    assert out["prior_runs"][0]["points"][0] == 80 and out["prior_runs"][0]["points"][1] is None
+    assert out["points"][0]["forecast"] == 100
+
+
+def test_snapshot_prior_runs_never_after_cutoff():
+    s = Store()
+    for cutoff in ["02:30", "09:30", "12:25", "23:59"]:
+        for i in range(1, 32):
+            out = s.replay(f"2026-01-{i:02}", cutoff)
+            newest = max(out["coverage"]["runs"])
+            assert all(r["publishTime"] < newest for r in out["prior_runs"])
+            assert len(out["prior_runs"]) <= 3
+
+
+def test_real_early_cutoff_leaves_late_targets_missing():
+    out = Store().replay("2026-01-01", "02:29", reveal=True)
+    missing = [p["hour"] for p in out["points"] if p["forecast"] is None]
+    assert missing == ["22:00", "23:00"]
+    assert out["coverage"]["forecast"] == 22 and out["metrics"]["n"] == 22
+    assert out["points"][-1]["error"] is None and out["points"][-1]["actual"] is not None
+    assert Store().replay("2026-01-01", "02:30")["coverage"]["forecast"] == 24
+
+
+def test_cutoff_sweep_matches_analysis_and_reports_coverage():
+    s = Store()
+    sweep = {c["cutoff"]: c for c in s.cutoff_sweep("hour_mean")["cutoffs"]}
+    assert len(sweep) == 24
+    assert sweep["00:00"]["n"] == 682 and sweep["00:00"]["forecast_coverage"] == 682
+    ten = s.analysis("10:00", "hour_mean")["metrics"]
+    assert sweep["10:00"]["mae"] == ten["mae"] and sweep["10:00"]["n"] == 744
+
+
+def test_default_month_baseline_is_unchanged():
+    a = Store().analysis("09:30", "hour_mean")
+    assert a["metrics"]["n"] == 744
+    assert a["metrics"]["mae"] == pytest.approx(2013.008064516129, abs=1e-9)
+    assert a["metrics"]["bias"] == pytest.approx(1729.9314516129032, abs=1e-9)
+    assert a["metrics"]["rmse"] == pytest.approx(2505.943149370381, abs=1e-9)
+    assert a["sensitivity"]["mae"] == pytest.approx(1995.57, abs=0.01)
+    assert a["distribution"]["n"] == 744
+    assert a["distribution"]["p10"] <= a["distribution"]["p50"] <= a["distribution"]["p90"]

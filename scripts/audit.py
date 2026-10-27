@@ -19,14 +19,15 @@ for day in range(1, 32):
         f = max(rows, key=lambda r: r["publishTime"])["generation"]
         av = (a[key] + a[(t + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")]) / 2
         errors.append(f - av)
-print(
-    json.dumps(
-        {
-            "n": len(errors),
-            "mae": sum(abs(e) for e in errors) / len(errors),
-            "bias": sum(errors) / len(errors),
-            "rmse": math.sqrt(sum(e * e for e in errors) / len(errors)),
-        },
-        indent=2,
-    )
-)
+result = {
+    "n": len(errors),
+    "mae": sum(abs(e) for e in errors) / len(errors),
+    "bias": sum(errors) / len(errors),
+    "rmse": math.sqrt(sum(e * e for e in errors) / len(errors)),
+}
+print(json.dumps(result, indent=2))
+# Documented baseline (README). Fails loudly if the snapshot or the method drifts.
+expected = {"n": 744, "mae": 2013.008064516129, "bias": 1729.9314516129032, "rmse": 2505.943149370381}
+assert result["n"] == expected["n"]
+assert all(math.isclose(result[k], expected[k], rel_tol=0, abs_tol=1e-9) for k in ["mae", "bias", "rmse"])
+print("Audit matches the documented baseline.")

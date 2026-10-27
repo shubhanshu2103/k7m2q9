@@ -1,17 +1,35 @@
 # Wind replay
 
-A January 2026 wind-forecast replay for a UK day-ahead purchasing team. React + TypeScript, Python + FastAPI, and an immutable Elexon snapshot.
+A January 2026 wind-forecast workbench for a UK day-ahead purchasing team. It answers two questions from the brief using only Elexon national wind data: *what wind forecast could the team actually see when it decided?* and *how wrong were those forecasts, quantitatively?* React + TypeScript, Python + FastAPI, Docker, and an immutable Elexon snapshot.
 
-**Status:** working local pilot, not a submitted challenge. Public repository, Vercel/Heroku deployment, demo recording/upload and submission are deferred. No deployed application link exists yet. Docker configuration is supplied but a container build/run has not been verified in the authoring environment because a Docker engine is unavailable. It must pass before claiming Docker delivery complete.
+**Status (27 October 2026):**
+
+- **Repository.** Public at https://github.com/shubhanshu2103/k7m2q9.
+- **First version.** GitHub Actions passed for commit `5276489`: [run 40538346465](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40538346465). That run covered pytest, the production build, Playwright, and a Docker image build with a container health/replay smoke.
+- **Second pass.** Described below. It was verified locally (see [Verify](#verify)) but has **not yet been pushed, so CI has not run on it**. A local Docker rebuild of the second pass was blocked by Docker Hub rate limiting (HTTP 429) in the authoring environment.
+- **Still pending.** Vercel/Heroku deployment: **no deployed application link exists yet**. Also pending: the demo video and the form submission.
 
 ## Product
 
-- **Decision replay:** pick a January purchase date and an assumed cutoff on that day. View the forecast for the following UK calendar day, with the actual forecast publication times used. Actuals are omitted from this API response.
-- **Reveal actuals:** switch explicitly to a retrospective comparison. Inspect paired targets, MAE, signed bias and RMSE, and export CSV with provenance.
-- **Accuracy lab:** evaluate all 31 purchase days at a consistent cutoff, compare daily error and hour-of-day bias, and compare two temporal assumptions.
-- **Data & method:** inspect source URLs, response hashes, per-day record counts and the limitations behind the numbers.
+The app has three screens, and every scenario is kept in the URL so a view can be shared, reloaded or stepped back to.
 
-This is wind uncertainty analysis, not a purchase recommendation. It has no demand, price or portfolio data, and makes no procurement-volume or savings claims.
+- **Decision replay: what was known.** Pick a January purchase day and an assumed cutoff on that day.
+  - **Forecast used.** The 24 hourly forecasts for the next UK day, chosen per target from runs published at or before the cutoff.
+  - **Provenance.** The run used, its age and lead times, and which targets have no eligible forecast. Missing targets are left blank.
+  - **Earlier runs and revision.** Up to three earlier eligible runs are drawn beside the chosen one, with the mean and largest change since the previous run. A buyer can see whether the outlook was moving, with no hindsight.
+  - **Export.** The decision export contains no actuals.
+- **Hindsight is a separate, labelled mode.** "Reveal actuals" switches to an amber *Hindsight view* with MAE, signed bias, the largest miss and a per-hour error chart.
+  - Changing the day or the cutoff starts a new decision and returns to the forecast-only view, so hindsight cannot silently carry over.
+  - The actual-comparison assumption is shown only where it has an effect.
+- **Accuracy lab: how wrong, where, and what to inspect next.** All 31 purchase days at one consistent cutoff.
+  - **Headline metrics.** MAE, bias and RMSE, with paired n.
+  - **Shortfall summary.** How often, and by how much, wind came in below the as-of forecast (percentiles of signed error).
+  - **Bad days.** Daily error chart with the five worst days. Clicking a bar or a listed day opens that exact replay in hindsight mode with the same cutoff and rule.
+  - **Cutoff sweep.** "Would deciding later have helped?" across 24 hourly cutoffs, flagging cutoffs whose coverage is incomplete.
+  - **Also included:** comparison-rule sensitivity and hour-of-day bias.
+- **Data & method.** Source URLs, response hashes, per-day record counts, method steps and the limitations behind the numbers.
+
+This is wind uncertainty analysis, not a purchase recommendation. The brief limits data to Elexon wind, so there is no demand, price or portfolio data. The app therefore makes no procurement-volume, cost or savings claim, and no calibrated risk claim.
 
 ## Run with Docker
 
@@ -29,11 +47,11 @@ docker build -t wind-replay .
 docker run --rm -p 8000:8000 wind-replay
 ```
 
-The two-stage build compiles React, then serves the frontend and Python API from one origin. The runtime uses a non-root user; Compose mounts a read-only filesystem with a temporary /tmp. `PORT` is configurable. The snapshot is bundled, so normal use needs no Elexon access, credentials or database.
+The two-stage build compiles React, then serves the frontend and the Python API from one origin. The runtime uses a non-root user; Compose mounts a read-only filesystem with a temporary /tmp. `PORT` is configurable. The snapshot is bundled, so normal use needs no Elexon access, credentials or database.
 
 ## Run without Docker
 
-Requires Python 3.10+ and Node 22. Tested here with Python 3.10 and Node 22. CI targets Python 3.12.
+Requires Python 3.10+ and Node 22. CI uses Python 3.12. The second pass was checked locally with Python 3.13 and Node 22.
 
 ```sh
 python -m venv .venv
@@ -54,21 +72,45 @@ For frontend development, run the Python command in one terminal and `npm run de
 ```sh
 python -m pytest -q
 npm run build
-npx playwright install chromium
+npx playwright install chromium     # or set PW_CHROMIUM_PATH to an existing Chromium
 npm run test:e2e
+python scripts/audit.py             # independent recomputation of the default month
 ```
 
-Observed result: **26 Python tests and 6 browser tests pass**. Browser tests start and stop their own backend on port 8000, so stop any existing local server first. The first test run exposed locator mistakes; those tests were corrected and the full suite rerun successfully. No tests are skipped. A dependency deprecation warning from Starlette's current TestClient/httpx combination remains; it does not fail the tests.
+Observed for the second pass, locally: **37 Python tests and 12 browser tests pass**, the strict TypeScript build passes and the independent audit reproduces the baseline numbers exactly. Browser tests start and stop their own backend on port 8000, so stop any local server first. No tests are skipped. Starlette's TestClient emits one deprecation warning; it does not fail the tests.
 
-Python coverage includes inclusive publication boundaries, exclusion of future versions, synthetic mixed-vintage fallback, missing forecasts, missing half-hours, revised actual selection, duplicate conflicts, offset timestamps, signed metrics, validation, CSV privacy, all 31 delivery days at seven cutoff scenarios, the late real January run, and snapshot hashes. Browser tests cover replay/reveal, delayed-run provenance, comparison switching, methodology, network-error recovery and no page overflow at 320, 390 and 1440 pixels, plus an empty-forecast view that never shows Infinity or fabricated accuracy. Actual desktop/mobile screenshots were inspected for readability, chart legends, responsive controls and visible caveats. These checks do not claim full WCAG certification or a browser matrix.
+**Python tests cover:**
+- inclusive publication boundaries and exclusion of future versions
+- synthetic mixed-vintage fallback, missing forecasts and missing half-hours
+- revised actual selection and duplicate conflicts
+- offset timestamps and signed metrics
+- percentile definitions
+- earlier-run selection: always older than the chosen run, never after the cutoff
+- the real early-cutoff coverage gap and the cutoff sweep
+- validation and 422 messages
+- CSV privacy and filenames
+- all 31 delivery days at seven cutoff scenarios
+- the late real January run, snapshot hashes, and pinned baseline metrics
 
-CI runs those checks and additionally builds and smoke-tests Docker. CI has been authored, not run on GitHub, since repository publication is on hold.
+**Browser tests cover:**
+- the decision view and the delayed-run boundary
+- hindsight resetting when the day or cutoff changes, but not when the rule changes
+- Lab-to-replay drill-through with Back/Forward
+- deep links, plus invalid URL values falling back visibly
+- a slow older request never overwriting a newer scenario
+- keyboard navigation and focus
+- metadata fetched once
+- no page overflow at 320, 390 and 1440px
+- network-error retry
+- an empty-coverage view that never shows Infinity, NaN or fabricated accuracy
+
+These checks are not a WCAG certification or a browser matrix. See [docs/verification.md](docs/verification.md).
 
 ## Data contract and assumptions
 
 ### Scope
 
-Interpret “purchase decisions in January 2026” as 1–31 January decision days and 2 January–1 February delivery days. Use the next UK calendar day. The whole target period is GMT, so Europe/London equals UTC here. This implementation deliberately rejects decision dates outside this period; it must be adapted, not blindly reused, for BST/DST days.
+"Purchase decisions in January 2026" is interpreted as decision days 1–31 January and delivery days 2 January–1 February, using the next UK calendar day. The whole target period is GMT, so Europe/London equals UTC here. The implementation deliberately rejects decision dates outside this period. It must be adapted, not blindly reused, for BST/DST days, which do not have 24 hours.
 
 ### Forecast selection
 
@@ -78,31 +120,55 @@ For every hourly target `t`, select:
 argmax publishTime among rows with startTime = t and publishTime <= decision cutoff
 ```
 
-The boundary is inclusive. Selection is independent per target, so the design supports mixed vintages. It does not assume a fixed publication schedule, interpolate values, or use a future run to fill a gap. Missing values remain missing and are excluded from paired metrics. `fallback` means a target uses an older vintage than the newest selected vintage on that delivery day. Zero fallback in this real snapshot does not prove the general case: synthetic fixtures explicitly exercise it.
+- **Selection rules.** The boundary is inclusive. Selection is independent per target, so mixed vintages are supported. It does not assume a fixed publication schedule, interpolate values, or use a future run to fill a gap.
+- **Missing values.** These remain missing and are excluded from paired metrics.
+- **Fallback.** `fallback` means a target uses an older vintage than the newest selected vintage on that delivery day. Zero fallback in the real snapshot does not prove the general case, so synthetic fixtures exercise it.
+- **Earlier runs (`prior_runs`).** Up to three runs that were also published at or before the cutoff and are older than the newest selected run. They show forecast drift; they never contribute values to the selection.
 
-09:30 UTC is an editable scenario default, **not a confirmed market deadline or user choice**. The brief defines publishTime as forecast creation time. We use it as an availability proxy; actual dissemination or ingestion lag is unknown. Therefore “as of” means as of recorded creation time, not guaranteed real-time receipt.
+09:30 UTC is an editable scenario default, **not a confirmed market deadline or user choice**. The brief defines publishTime as forecast creation time. We use it as an availability proxy; actual dissemination or ingestion lag is unknown. So "as of" means as of recorded creation time, not guaranteed real-time receipt.
 
 ### Actuals, temporal meaning and fleet
 
-FUELHH documents 30-minute average MW. WINDFOR has hourly target timestamps. Sources inspected call it hourly but do not establish its within-hour meaning. The app exposes two **provisional assumptions**:
+FUELHH documents 30-minute average MW. WINDFOR has hourly target timestamps. The sources inspected call it hourly but do not establish its within-hour meaning. The app exposes two **provisional assumptions**:
 
-1. `hour_mean`: arithmetic mean of the half-hours at H and H+30 minutes. This is the UI default, not a validated interpretation.
-2. `first_half`: compare the forecast at H with the 30-minute average starting H.
+1. `hour_mean`: arithmetic mean of the half-hours at H and H+30 minutes. This is the default, not a validated interpretation.
+2. `first_half`: compare the forecast at H with the 30-minute average starting at H.
 
-Neither rule is semantically established. Similar sensitivity results do not prove correctness. The product labels metrics provisional and does not calculate daily energy from hourly values. The official Elexon wind page directly compares WINDFOR with Generation by Fuel Type outturn, supporting the intended comparison but not establishing a unit-level fleet reconciliation. Scope is visible/operationally metered GB transmission wind, **not all embedded wind or total UK wind**.
+Neither rule is semantically established, and similar sensitivity results do not prove correctness. The product labels metrics provisional and does not calculate daily energy from hourly values.
 
-Actuals use the latest publishTime returned per startTime in the fixed snapshot. They are retrospective, not claimed to have been available at the purchase cutoff. This response has one row per actual startTime and no revisions; that does not prove historical revisions never existed. Exact duplicate observations are deduplicated; conflicting generation at identical keys raises an error rather than silently picking one.
+The official Elexon wind page directly compares WINDFOR with Generation by Fuel Type outturn. That supports the intended comparison but does not establish a unit-level fleet reconciliation. Scope is visible/operationally metered GB transmission wind, **not all embedded wind or total UK wind**.
+
+Actuals use the latest publishTime returned per startTime in the fixed snapshot. They are retrospective, not claimed to have been available at the purchase cutoff. This response has one row per actual startTime and no revisions, which does not prove historical revisions never existed. Exact duplicate observations are deduplicated; conflicting generation at identical keys raises an error rather than silently picking one.
+
+### Metrics
+
+- **Sign convention.** Error is forecast minus actual, so positive bias means over-forecast.
+- **What is reported.** MAE, bias, RMSE and the largest absolute error use paired hours only and always report n. Empty samples give null, never zero.
+- **Shortfall percentiles.** These are empirical P10/P50/P90 of signed error and P50/P90 of absolute error, using linear interpolation between ranks (numpy's default), plus the share of over-forecast hours. They describe January at one cutoff; they are **not** a calibrated interval, and none of them appears in the decision view.
+- **MAPE.** Omitted because it is unstable at low wind.
 
 ### Snapshot findings
 
-- Forecast publish windows: 29 December 2025 through 31 January 2026; upper query bound 1 February.
-- 19,856 forecast rows; 272 runs; 34 publication days; 584 rows and 8 runs per day; 73 hourly targets per run, including past targets. Not 73 exclusively future hours.
-- 1,488 unique WIND actual half-hours, 48 per delivery day.
-- No duplicate forecast `(publishTime, startTime)` pairs or duplicate actual startTimes in these acquired responses.
-- Tested cutoff scenarios 07:30, 09:20, 09:30, 11:30, 15:30, 22:30 and 23:59 UTC: 24/24 forecast targets and 24/24 actual comparisons on every delivery day, zero mixed vintages.
-- The 15 January usual 11:30 run has publishTime 12:25. For delivery 16 January, an 11:30 cutoff uses the 09:30 run. The exact 12:25 boundary includes the delayed run.
+- **Forecast publication.** Publish windows run from 29 December 2025 through 31 January 2026, with an upper query bound of 1 February.
+- **Forecast volume.** 19,856 forecast rows in 272 runs over 34 publication days: 584 rows and 8 runs per day, and 73 hourly targets per run. Those 73 include past targets; they are not 73 exclusively future hours.
+- **Actuals.** 1,488 unique WIND actual half-hours, 48 per delivery day.
+- **Duplicates.** None: no duplicate forecast `(publishTime, startTime)` pairs or duplicate actual startTimes.
+- **Coverage by cutoff.** Checked at every minute of the day across all 31 days:
+  - From 02:30 to 23:59 UTC, every cutoff covers 24/24 targets.
+  - From **00:00 to 02:29**, the newest eligible run (22:30 the previous evening) stops short, so the **22:00 and 23:00 delivery targets are genuinely missing** (22/24) and shown blank.
+  - No cutoff produces mixed vintages.
+- **Late run.** The 15 January usual 11:30 run has publishTime 12:25. For delivery 16 January, an 11:30 cutoff uses the 09:30 run; the exact 12:25 boundary includes the delayed run.
 
-At the illustrative 09:30 cutoff, hourly-mean comparison yields 744 pairs, MAE 2,013.01 MW, signed bias +1,729.93 MW and RMSE 2,505.94 MW. First-half-hour comparison yields MAE 1,995.57 MW and bias +1,727.98 MW. These are provisional comparison results for this period, not a calibrated risk distribution or evidence that either temporal assumption is true. Bias is forecast minus actual; positive means over-forecast. Metrics use paired points only and all report sample size. MAPE is omitted to avoid division instability near zero.
+**Default month (09:30 cutoff, hourly-mean comparison).**
+- **Headline metrics.** 744 pairs, MAE 2,013.01 MW, signed bias +1,729.93 MW, RMSE 2,505.94 MW. First-half-hour comparison gives MAE 1,995.57 MW and bias +1,727.98 MW.
+- **Shortfall percentiles.** 84% of hours were over-forecast. The 90th percentile of signed error is 4,144 MW, the median absolute error 1,608 MW and the 10th percentile −489 MW.
+- **Five worst days.** Delivery 28, 12, 11, 21 and 27 January. Every hour of those days was over-forecast (MAE equals bias).
+
+**Cutoff sweep (hourly cutoffs, hourly mean).**
+- **MAE falls slowly** from about 2,070 MW (03:00) to 2,013 MW (10:00), 1,901 MW (12:00) and 1,825 MW (23:00).
+- **Bias stays near +1.6 to +1.8 GW** at every cutoff.
+
+These are provisional comparison results for this period. They are not a calibrated risk distribution, not evidence that either temporal assumption is true, and not an explanation of the bias. The snapshot cannot distinguish forecast error from curtailment or a fleet-scope difference between WINDFOR and FUELHH.
 
 ### Refresh and provenance
 
@@ -113,64 +179,107 @@ python scripts/snapshot.py
 python -m pytest -q
 ```
 
-Refresh intentionally replaces the snapshot. Commit the new response files and manifest together after review, and investigate changed counts or hashes. The script waits for both responses before writing but is not a transaction-safe production ingestion service. A production version would use versioned atomic snapshots and a monitored ingestion pipeline.
+Refresh intentionally replaces the snapshot. After review, commit the new response files and manifest together, and investigate any changed counts or hashes. Several tests pin the current snapshot's numbers and will fail after a refresh until reviewed. The script waits for both responses before writing but is not a transaction-safe production ingestion service.
 
 ## API
 
 - `GET /api/health`
-- `GET /api/meta`: counts, per-day provenance and snapshot manifest.
+- `GET /api/meta`: counts, per-day provenance and the snapshot manifest.
 - `GET /api/replay?decision=2026-01-15&cutoff=11:30&rule=hour_mean&reveal=false`
-- `GET /api/analysis?cutoff=09:30&rule=hour_mean`
-- `GET /api/export`: same parameters as replay, returns CSV. Hidden actuals remain absent from the export.
+  - Returns 24 points with `forecast`, `publishTime`, `fallback` and `age_hours`, plus `coverage` and `prior_runs`.
+  - With `reveal=true` it also returns `actual`, `actual_publishTimes`, `error`, `metrics` and actual coverage. With `reveal=false` these are absent.
+- `GET /api/analysis?cutoff=09:30&rule=hour_mean`: month metrics, `distribution`, rule sensitivity, per-day and per-hour metrics.
+- `GET /api/cutoff-sweep?rule=hour_mean`: month MAE, bias, RMSE, paired n, forecast coverage and mean forecast age for each hourly cutoff 00:00–23:00.
+- `GET /api/export`: same parameters as replay. Returns CSV named by day, cutoff and view, e.g. `wind-replay-2026-01-15-0930-decision.csv`. Hidden actuals remain absent from the decision export.
 - `GET /docs`: generated API reference.
 
-Input errors return 422. Empty paired samples return null metrics, not zero. Error and empty states are distinct. The React client cancels stale requests when a scenario changes and removes stale results before showing a loading or error state. Decision/reveal separation is a UX/API contract, not an access-control boundary: this non-sensitive historical pilot intentionally exposes retrospective endpoints. Authentication would be required for a private production deployment.
+**Error contract.** Invalid scenarios return 422 with a readable message; unexpected server errors remain 500 rather than being reported as user input errors.
+
+**Caching.** Full-month results are cached in process because the snapshot is immutable. The React client cancels superseded requests and ties every result to the exact request that produced it. It reuses immutable responses within a page session and never caches failures.
+
+**Not access control.** Decision/hindsight separation is a UX/API contract, not an access-control boundary. This non-sensitive historical pilot intentionally exposes retrospective endpoints; a private production deployment would need authentication.
 
 ## File map
 
 ```
-backend/engine.py          Pure selection, actual revision and metric logic; snapshot store
-backend/app.py             FastAPI routes, validation boundary, CSV export, static serving
-frontend/main.tsx          Typed React replay, analysis and methodology UI
-frontend/style.css         Responsive layout and chart treatment
-scripts/snapshot.py        Explicit bounded Elexon snapshot acquisition
-scripts/verify_visual.py   Reproducible desktop/mobile screenshot capture
-scripts/audit.py           Independent numerical cross-check
-scripts/smoke.sh           Local one-origin smoke check
-scripts/measure.py         Microbenchmark (no external requests)
-data/wind.json             Raw WINDFOR stream response
-data/actual.json           Raw FUELHH WIND stream response
-data/manifest.json         Queries, retrieval time, counts and hashes
-tests/test_engine.py       Selection, metrics, synthetic edge cases, real snapshot tests
-tests/test_api.py          HTTP schema, validation and CSV checks
-tests/browser/             Browser interactions, responsiveness and retry tests
-screenshots/               Inspected example desktop/mobile output
-docs/architecture.md       Design choices, production path and tradeoffs
-docs/demo-outline.md       Customer and technical walkthrough guide; not a recording
-docs/verification.md       Observed checks and remaining unverified areas
-docs/effort.md             Timing provenance and 16-hour cap notes
-Dockerfile                 Multi-stage, non-root one-origin runtime
-compose.yaml               Local container service and healthcheck
-.github/workflows/ci.yml   Python, React, browser, Docker CI checks
-package-lock.json          Locked frontend dependency graph
-requirements*.txt          Pinned direct Python dependencies
+backend/engine.py              Pure domain logic: validation, per-target selection, earlier runs,
+                               actual revisions, metrics and percentiles; in-memory snapshot store
+backend/app.py                 FastAPI routes, 422 mapping, CSV export, static asset serving
+frontend/main.tsx              Entry point
+frontend/App.tsx               Shell, navigation, URL-synchronised scenario, focus management
+frontend/scenario.ts           Scenario type, URL parse/serialise with validation, hindsight-reset rule
+frontend/api.ts                Typed API responses and the request hook (abort, cache, retry)
+frontend/format.ts             Number/date formatting and the chart palette
+frontend/ui.tsx                Shared stat, notice, loading/error and control components
+frontend/screens/ReplayScreen.tsx    Decision/hindsight replay
+frontend/screens/AnalysisScreen.tsx  Accuracy lab, drill-through and cutoff sweep
+frontend/screens/MethodScreen.tsx    Data, method and provenance
+frontend/style.css             Tokenised responsive styles
+scripts/snapshot.py            Explicit bounded Elexon snapshot acquisition
+scripts/audit.py               Independent numerical cross-check
+scripts/smoke.sh               Local one-origin smoke check
+scripts/measure.py             Microbenchmark (no external requests)
+scripts/verify_visual.mjs      Reproducible desktop/mobile screenshot capture
+data/wind.json                 Raw WINDFOR stream response
+data/actual.json               Raw FUELHH WIND stream response
+data/manifest.json             Queries, retrieval time, counts and hashes
+tests/test_engine.py           Selection, metrics, synthetic edge cases, real snapshot tests
+tests/test_api.py              HTTP schema, validation and CSV checks
+tests/browser/app.spec.js      Browser interactions, URL state, races, keyboard, responsiveness, retry
+screenshots/                   Inspected desktop/mobile captures of the current UI
+docs/architecture.md           Design choices, production path and tradeoffs
+docs/demo-outline.md           Customer and technical walkthrough script; not a recording
+docs/verification.md           Observed checks and remaining unverified areas
+Dockerfile                     Multi-stage, non-root one-origin runtime
+compose.yaml                   Local container service and healthcheck
+.github/workflows/ci.yml       Python, React, browser, audit and Docker CI checks
+playwright.config.js           Browser test runner; optional PW_CHROMIUM_PATH
+package.json, package-lock.json      Frontend scripts and locked dependency graph
+requirements*.txt, pyproject.toml    Pinned direct Python dependencies and tool settings
 ```
 
 ## Design and operating limits
 
-There is no database because a 20k-row bounded snapshot does not justify one. Selection is indexed by target in memory; request-time replay never calls Elexon. A single runtime origin avoids CORS and separate frontend/backend hosting assumptions. Pure domain logic is isolated from HTTP and presentation. UI does not make financial decisions or use hidden training/error bands.
+- **No database.** A 20k-row bounded snapshot does not justify one. Selection is indexed by target in memory, and request-time replay never calls Elexon.
+- **One runtime origin.** This avoids CORS and separate frontend/backend hosting assumptions.
+- **Layering.** Pure domain logic is isolated from HTTP and presentation.
+- **No hidden models.** The UI makes no financial decisions and uses no hidden training or error bands.
 
-This is a deliberately small pilot, not an “enterprise-ready” system. Production would need agreed temporal semantics, timestamp-availability guarantees, operational controls, authentication/authorization where applicable, revision handling, atomic ingestion, monitoring, load tests, accessibility review and deploy-specific security configuration. No distributed services, queues, infrastructure wrappers or false scale claims were added to decorate the architecture. See `docs/architecture.md`.
+This is a deliberately small pilot, not an "enterprise-ready" system. Production would need:
+- agreed temporal semantics and timestamp-availability guarantees
+- operational controls, plus authentication/authorization where applicable
+- revision handling and atomic ingestion
+- monitoring and load tests
+- an accessibility review and deploy-specific security configuration
 
-## Deployment and submission hold
+No distributed services, queues or infrastructure wrappers were added. See `docs/architecture.md`.
 
-The brief requires Vercel or Heroku deployment, an anonymously named public GitHub repo, an unlisted YouTube video of no more than 10 minutes (customer overview and technical walkthrough no more than five minutes each), and submission. Those effects are deferred at the user's request. No hosting purchase, repo creation, video upload or form submission has occurred. There is no placeholder deployment URL.
+## Deployment and submission
 
-The Docker `PORT` contract prepares a container-hosted route; it does not prove provider eligibility, free capacity or compatibility. Verify the chosen provider's current runtime and free-tier rules before deployment. Do not assume Heroku is free. Public links and incognito access remain to be tested after publication is authorized. The local pilot may be reviewed now without publishing it.
+The brief requires:
+- a Vercel or Heroku deployment
+- an anonymously named public GitHub repo, which this repository satisfies
+- an unlisted YouTube video of at most 10 minutes: a customer overview and a technical walkthrough of at most five minutes each
+- form submission
+
+**Deployed application link: pending, not yet deployed.** There is no placeholder URL. The video and form submission are also pending.
+
+The Docker `PORT` contract prepares a container-hosted route; it does not prove provider eligibility, free capacity or compatibility. Verify the chosen provider's current runtime and plan rules before deploying, and do not assume Heroku is free. Open every submitted URL in a private/incognito window before submission.
 
 ## AI disclosure
 
-AI assistance was used for domain research, implementation, test generation, documentation and visual review. User-supplied Claude architecture proposals were reviewed during design and informed the architecture discussion. No direct Claude coding session or direct Claude API call was used for this implementation. All selected behavior and data assumptions are explicit, testable and explained above. This disclosure is required by the brief; the project makes no claim about evading AI detection.
+AI assistance was used in this project, as the brief permits.
+
+- **First version.** AI assistance was used for domain research, implementation, test generation, documentation and visual review. User-supplied Claude architecture proposals were reviewed during design and informed the architecture discussion.
+- **Second pass.** The second-pass review and implementation was carried out in a Claude Code session (Anthropic's AI coding agent) at the author's direction. That pass covered:
+  - the frontend split
+  - URL state and hindsight reset
+  - earlier runs, shortfall percentiles, the cutoff sweep and drill-through
+  - styling and accessibility fixes
+  - new tests and these documentation updates
+- **Review.** The author reviews and is responsible for all changes.
+
+All selected behaviour and data assumptions are explicit, testable and explained above.
 
 ## Sources
 
