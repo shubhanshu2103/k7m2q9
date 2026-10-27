@@ -1,12 +1,13 @@
+import pytest
+
 from backend.engine import (
     Store,
-    normalize,
-    timestamp,
-    select_forecasts,
     latest_actuals,
     metrics,
+    normalize,
+    select_forecasts,
+    timestamp,
 )
-import pytest
 
 
 def row(t="2026-01-02T00:00:00Z", p="2026-01-01T09:30:00Z", g=100, fuel=None):
@@ -127,7 +128,7 @@ def test_snapshot_counts_and_integrity():
 
 
 def test_quantile_and_distribution():
-    from backend.engine import quantile, distribution
+    from backend.engine import distribution, quantile
 
     assert quantile([], 0.5) is None
     assert quantile([3, 1, 2], 0.5) == 2

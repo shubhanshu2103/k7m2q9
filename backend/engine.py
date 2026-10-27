@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from collections import defaultdict, Counter
+import json
+import math
+import re
+import statistics
+from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, date
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Literal
-import json, math, re, statistics
+from typing import Any, Literal
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -127,7 +131,9 @@ def by_level(points: list[dict]) -> list[dict]:
         band = [
             p
             for p in points
-            if p.get("error") is not None and lo <= p["forecast"] and (hi is None or p["forecast"] < hi)
+            if p.get("error") is not None
+            and lo <= p["forecast"]
+            and (hi is None or p["forecast"] < hi)
         ]
         d = distribution(band)
         out.append(
@@ -229,7 +235,9 @@ class Store:
             for p in earlier
         ]
 
-    def replay(self, decision: str, cutoff: str = "09:30", rule: str = "hour_mean", reveal: bool = False):
+    def replay(
+        self, decision: str, cutoff: str = "09:30", rule: str = "hour_mean", reveal: bool = False
+    ):
         sc = parse_scenario(decision, cutoff, rule)
         targets = sc.targets
         candidates = [r for t in targets for r in self.by_target[t]]
@@ -289,7 +297,11 @@ class Store:
             paired = []
             for p in past["points"]:
                 value, _ = self._actual_for(p["time"], sc.rule, available_by=sc.gate)
-                error = p["forecast"] - value if p["forecast"] is not None and value is not None else None
+                error = (
+                    p["forecast"] - value
+                    if p["forecast"] is not None and value is not None
+                    else None
+                )
                 paired.append({**p, "actual": value, "error": error})
             # Only complete days: a half-reported day would bias the summary towards the night.
             if all(p["error"] is not None for p in paired):
@@ -374,7 +386,9 @@ class Store:
             if len(pairs) < 3:
                 return None
             try:
-                return statistics.correlation([r[key] for r, _ in pairs], [d[key] for _, d in pairs])
+                return statistics.correlation(
+                    [r[key] for r, _ in pairs], [d[key] for _, d in pairs]
+                )
             except statistics.StatisticsError:
                 return None
 

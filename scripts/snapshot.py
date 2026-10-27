@@ -1,6 +1,9 @@
 """Explicit refresh only. No third-party calls from the running application."""
 
-import json, hashlib, urllib.request, urllib.parse
+import hashlib
+import json
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 

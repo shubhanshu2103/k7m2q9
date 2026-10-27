@@ -8,16 +8,23 @@ const out = new URL("../screenshots/", import.meta.url).pathname;
 mkdirSync(out, { recursive: true });
 
 const browser = await chromium.launch(
-  process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
+  process.env.PW_CHROMIUM_PATH
+    ? { executablePath: process.env.PW_CHROMIUM_PATH }
+    : {},
 );
-const shot = async (page, name) => page.screenshot({ path: out + name, fullPage: true });
+const shot = async (page, name) =>
+  page.screenshot({ path: out + name, fullPage: true });
 
-const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+const desktop = await browser.newPage({
+  viewport: { width: 1440, height: 1000 },
+});
 await desktop.goto(base + "/");
 await desktop.locator(".run-list strong").first().waitFor();
 await shot(desktop, "decision-desktop.png");
 await desktop.getByRole("button", { name: "Reveal actuals" }).click();
-await desktop.getByRole("heading", { name: "Where the miss happened" }).waitFor();
+await desktop
+  .getByRole("heading", { name: "Where the miss happened" })
+  .waitFor();
 await shot(desktop, "retrospective-desktop.png");
 await desktop.getByRole("button", { name: "02 Accuracy lab" }).click();
 await desktop.getByText("Lowest full-coverage MAE").waitFor();
@@ -32,7 +39,10 @@ await mobile.locator(".source-list").waitFor();
 await shot(mobile, "method-mobile.png");
 
 const narrow = await browser.newPage({ viewport: { width: 320, height: 720 } });
-await narrow.goto(base + "/?view=replay&decision=2026-01-01&cutoff=01:00&rule=hour_mean&reveal=1");
+await narrow.goto(
+  base +
+    "/?view=replay&decision=2026-01-01&cutoff=01:00&rule=hour_mean&reveal=1",
+);
 await narrow.getByText("No eligible forecast for 22:00, 23:00").waitFor();
 await shot(narrow, "missing-coverage-320.png");
 

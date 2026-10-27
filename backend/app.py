@@ -1,9 +1,13 @@
-import csv, io
-from typing import Any, Callable
+import csv
+import io
+from collections.abc import Callable
+from typing import Any
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from .engine import Store, ROOT
+
+from .engine import ROOT, Store
 
 app = FastAPI(title="Wind replay", version="1.1.0")
 store = Store()
@@ -83,7 +87,9 @@ def export(
             }
         )
     view = "retrospective" if reveal else "decision"
-    name = f"wind-replay-{data['decision_date']}-{data['cutoff'][11:16].replace(':', '')}-{view}.csv"
+    name = (
+        f"wind-replay-{data['decision_date']}-{data['cutoff'][11:16].replace(':', '')}-{view}.csv"
+    )
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
