@@ -28,6 +28,7 @@ Bounded Elexon GETs -> raw JSON + manifest -> in-memory Store (backend/engine.py
 - **Store loading.** The store normalises timestamps to aware UTC, rejects invalid numeric values, resolves actual revisions and indexes forecasts by target.
 - **`select_forecasts`.** Inclusive and per target.
 - **`_prior_runs`.** Reuses the same `publishTime <= cutoff` filter, then keeps up to three runs older than the newest selected run. It cannot add hindsight by construction.
+- **`track_record`.** Replays earlier purchase days at the same cutoff and pairs them with actuals through `_actual_for(..., available_by=cutoff)`, which treats any half-hour published after the cutoff as missing. Only complete days enter the window. `_track_record_check` backtests that context across the month. The API adds `track_record` to replay responses but not to CSV exports.
 - **`metrics` and `distribution`.** Pure functions over paired points.
 - **Caching.** Full-month analysis and the 24-cutoff sweep are `lru_cache`d per process. The data is immutable, and an uncached sweep takes about 1.1 s locally.
 
@@ -57,6 +58,9 @@ A multistage image builds TypeScript and React, then copies only the assets and 
   - There is no demand, price or portfolio data, so they are not turned into a volume.
 - **Cutoff sweep.** The cutoff is an assumption, so the useful question is how sensitive the answer is to it. The sweep shows that later cutoffs reduce MAE only modestly while the large positive bias persists. It also surfaced a real coverage gap for cutoffs before 02:30.
   - It does not claim when the market actually closes.
+- **Track record at decision time (third pass).** FUELHH rows carry their own `publishTime`, 30–145 minutes after each half-hour in this snapshot. So the decision view can show how the same cutoff's forecasts fared over recent complete delivery days using only actuals published by the cutoff. This is the legitimate decision-time version of "consider the quantified error".
+  - **Backtested in the Lab before anyone relies on it.** Day to day it was not predictive in January (correlations −0.40 for bias, −0.52 for MAE over 29 days). A naive bias subtraction would have cut MAE by 14%, but that is in-sample and the bias's cause is unknown.
+  - **What the UI does with that.** It shows the record as context with that caveat, and never shows an adjusted forecast.
 - **Drill-through over a new screen.** Poor days link to the exact replay with the same cutoff and rule, in an explicitly labelled hindsight mode. No new tab was added.
 
 ## Choices

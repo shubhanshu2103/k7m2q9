@@ -45,6 +45,16 @@ export type Replay = {
   };
   prior_runs: PriorRun[];
   metrics?: Metrics;
+  track_record: TrackRecord;
+};
+
+/** Recent delivery days scored with actuals published at or before the decision cutoff. */
+export type TrackRecord = {
+  available_by: string;
+  window_days: number;
+  days: (Metrics & { decision_date: string; delivery_date: string })[];
+  metrics: Metrics;
+  hourly_bias: (number | null)[];
 };
 
 export type Day = Metrics & {
@@ -75,6 +85,14 @@ export type Analysis = {
   sensitivity: Metrics & { alternate_rule: Rule };
   days: Day[];
   hourly: (Metrics & { hour: string })[];
+  track_record_check: {
+    days: number;
+    bias_correlation: number | null;
+    mae_correlation: number | null;
+    n: number;
+    mae: number | null;
+    adjusted_mae: number | null;
+  };
 };
 
 export type Sweep = {
@@ -124,7 +142,11 @@ type State<T> = { path: string | null; data: T | null; error: string };
  * slower response for an older scenario can never be shown for a newer one.
  */
 export function useApi<T>(path: string | null) {
-  const [state, setState] = useState<State<T>>({ path: null, data: null, error: "" });
+  const [state, setState] = useState<State<T>>({
+    path: null,
+    data: null,
+    error: "",
+  });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {

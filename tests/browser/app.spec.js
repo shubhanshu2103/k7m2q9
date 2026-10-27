@@ -1,11 +1,16 @@
 import { test, expect } from "@playwright/test";
 
-const stat = (page, text) => page.locator(".stat-value").filter({ hasText: text });
+const stat = (page, text) =>
+  page.locator(".stat-value").filter({ hasText: text });
 const mode = (page) => page.getByRole("region", { name: "View mode" });
 
-test("decision view, delayed run boundary, reveal, analysis and provenance", async ({ page }) => {
+test("decision view, delayed run boundary, reveal, analysis and provenance", async ({
+  page,
+}) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Tomorrow, as seen yesterday." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Tomorrow, as seen yesterday." }),
+  ).toBeVisible();
   await expect(mode(page)).toContainText("Decision view");
   await expect(stat(page, "24/24")).toBeVisible();
   // Earlier eligible runs are shown, none after the cutoff.
@@ -13,15 +18,23 @@ test("decision view, delayed run boundary, reveal, analysis and provenance", asy
 
   // 15 Jan: the usual 11:30 run was recorded at 12:25, so 11:30 must still use 09:30.
   await page.locator("#cutoff").fill("11:30");
-  await expect(page.locator(".run-list strong")).toHaveText(["2026-01-15 09:30 UTC"]);
+  await expect(page.locator(".run-list strong")).toHaveText([
+    "2026-01-15 09:30 UTC",
+  ]);
   await page.locator("#cutoff").fill("12:25");
-  await expect(page.locator(".run-list strong")).toHaveText(["2026-01-15 12:25 UTC"]);
+  await expect(page.locator(".run-list strong")).toHaveText([
+    "2026-01-15 12:25 UTC",
+  ]);
 
   await page.getByRole("button", { name: "Reveal actuals" }).click();
   await expect(mode(page)).toContainText("Hindsight view");
-  await expect(page.getByRole("button", { name: "Hide actuals" })).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", { name: "Hide actuals" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("Signed bias", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Where the miss happened" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Where the miss happened" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "02 Accuracy lab" }).click();
   await expect(stat(page, "744/744")).toBeHidden(); // cutoff 12:25 carried over
@@ -38,7 +51,9 @@ test("decision view, delayed run boundary, reveal, analysis and provenance", asy
   await expect(stat(page, "1,488")).toBeVisible();
 });
 
-test("a new day or cutoff returns to the decision view; a rule change does not", async ({ page }) => {
+test("a new day or cutoff returns to the decision view; a rule change does not", async ({
+  page,
+}) => {
   await page.goto("/");
   const reveal = page.getByRole("button", { name: "Reveal actuals" });
   await reveal.click();
@@ -51,7 +66,9 @@ test("a new day or cutoff returns to the decision view; a rule change does not",
   await expect(page.locator(".key.actual")).toHaveCount(0);
   await expect(page.getByText("Signed bias", { exact: true })).toHaveCount(0);
   await expect(page.locator("#rule")).toHaveCount(0); // irrelevant before reveal
-  await expect(page.getByRole("link", { name: /Export decision CSV/ })).toHaveAttribute("href", /reveal=false/);
+  await expect(
+    page.getByRole("link", { name: /Export decision CSV/ }),
+  ).toHaveAttribute("href", /reveal=false/);
 
   await reveal.click();
   await page.locator("#cutoff").fill("10:00");
@@ -63,7 +80,9 @@ test("a new day or cutoff returns to the decision view; a rule change does not",
   await expect(mode(page)).toContainText("Decision view");
 });
 
-test("worst day drill-through keeps cutoff and rule, labels hindsight, and Back returns", async ({ page }) => {
+test("worst day drill-through keeps cutoff and rule, labels hindsight, and Back returns", async ({
+  page,
+}) => {
   await page.goto("/?view=analysis&cutoff=09:30&rule=first_half");
   const first = page.locator(".inspect button").first();
   await expect(first).toContainText("Delivery Wed 28 Jan");
@@ -78,17 +97,27 @@ test("worst day drill-through keeps cutoff and rule, labels hindsight, and Back 
   await expect(page.locator(".context-line")).toContainText("Wed 28 Jan");
 
   await page.goBack();
-  await expect(page.getByRole("heading", { name: "How much did the forecast miss?" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "How much did the forecast miss?" }),
+  ).toBeVisible();
   await page.goForward();
   await expect(mode(page)).toContainText("Hindsight view");
 });
 
-test("deep links restore a scenario and invalid values fall back visibly", async ({ page }) => {
-  await page.goto("/?view=replay&decision=2026-01-01&cutoff=01:00&rule=hour_mean&reveal=0");
+test("deep links restore a scenario and invalid values fall back visibly", async ({
+  page,
+}) => {
+  await page.goto(
+    "/?view=replay&decision=2026-01-01&cutoff=01:00&rule=hour_mean&reveal=0",
+  );
   await expect(stat(page, "22/24")).toBeVisible();
-  await expect(page.getByText("No eligible forecast for 22:00, 23:00")).toBeVisible();
+  await expect(
+    page.getByText("No eligible forecast for 22:00, 23:00"),
+  ).toBeVisible();
 
-  await page.goto("/?view=replay&decision=2026-02-01&cutoff=25:00&rule=hour_mean");
+  await page.goto(
+    "/?view=replay&decision=2026-02-01&cutoff=25:00&rule=hour_mean",
+  );
   await expect(page.getByText(/invalid decision, cutoff values/)).toBeVisible();
   await expect(page.locator("#decision")).toHaveValue("2026-01-15");
   await expect(page.locator("#cutoff")).toHaveValue("09:30");
@@ -100,7 +129,9 @@ test("deep links restore a scenario and invalid values fall back visibly", async
   await expect(mode(page)).toContainText("Decision view");
 });
 
-test("a slow older request never overwrites a newer scenario", async ({ page }) => {
+test("a slow older request never overwrites a newer scenario", async ({
+  page,
+}) => {
   await page.route("**/api/replay?decision=2026-01-16*", async (route) => {
     await new Promise((r) => setTimeout(r, 1500));
     await route.continue().catch(() => {});
@@ -116,7 +147,9 @@ test("a slow older request never overwrites a newer scenario", async ({ page }) 
   await expect(page.locator("#decision")).toHaveValue("2026-01-17");
 });
 
-test("keyboard navigation moves focus to the new screen and toggles hindsight", async ({ page }) => {
+test("keyboard navigation moves focus to the new screen and toggles hindsight", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.getByRole("button", { name: "02 Accuracy lab" }).focus();
   await page.keyboard.press("Enter");
@@ -126,7 +159,9 @@ test("keyboard navigation moves focus to the new screen and toggles hindsight", 
   await page.getByRole("button", { name: "Reveal actuals" }).focus();
   await page.keyboard.press("Space");
   await expect(mode(page)).toContainText("Hindsight view");
-  await expect(page.getByRole("button", { name: "01 Decision replay" })).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("button", { name: "01 Decision replay" }),
+  ).toHaveAttribute("aria-current", "page");
 });
 
 test("immutable metadata is requested once per session", async ({ page }) => {
@@ -152,11 +187,17 @@ for (const width of [320, 390, 1440])
       await expect(page.getByRole("status")).toHaveCount(0);
       await expect(page.getByRole("alert")).toHaveCount(0);
       await page.locator("details summary").first().click();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
     }
   });
 
-test("network failure shows a retry instead of stale data", async ({ page }) => {
+test("network failure shows a retry instead of stale data", async ({
+  page,
+}) => {
   await page.route("**/api/replay**", (r) => r.abort());
   await page.goto("/");
   await expect(page.getByRole("alert")).toContainText("Replay could not load");
@@ -166,21 +207,77 @@ test("network failure shows a retry instead of stale data", async ({ page }) => 
   await expect(stat(page, "24/24")).toBeVisible();
 });
 
-test("empty eligible forecast set stays blank, never Infinity or zero accuracy", async ({ page }) => {
+test("empty eligible forecast set stays blank, never Infinity or zero accuracy", async ({
+  page,
+}) => {
   await page.route("**/api/replay**", async (route) => {
     const response = await route.fetch();
     const data = await response.json();
-    data.points = data.points.map((p) => ({ ...p, forecast: null, publishTime: null }));
-    data.coverage = { forecast: 0, expected: 24, runs: [], fallback_intervals: 0 };
+    data.points = data.points.map((p) => ({
+      ...p,
+      forecast: null,
+      publishTime: null,
+    }));
+    data.coverage = {
+      forecast: 0,
+      expected: 24,
+      runs: [],
+      fallback_intervals: 0,
+    };
     data.prior_runs = [];
     await route.fulfill({ response, json: data });
   });
   await page.goto("/");
   await expect(stat(page, "0/24")).toBeVisible();
   await expect(stat(page, "None")).toBeVisible();
-  await expect(page.getByText("Nothing was published before this cutoff")).toBeVisible();
+  await expect(
+    page.getByText("Nothing was published before this cutoff"),
+  ).toBeVisible();
   // Case-sensitive whole words: a plain substring match would hit "provenance".
   await expect(page.getByText(/\bInfinity\b/)).toHaveCount(0);
   await expect(page.getByText(/\bNaN\b/)).toHaveCount(0);
-  expect(await page.locator("main").innerText()).not.toMatch(/\bNaN\b|Infinity/);
+  expect(await page.locator("main").innerText()).not.toMatch(
+    /\bNaN\b|Infinity/,
+  );
+});
+
+test("decision view shows a track record built only from already-published actuals", async ({
+  page,
+}) => {
+  await page.goto(
+    "/?view=replay&decision=2026-01-15&cutoff=09:30&rule=hour_mean&reveal=0",
+  );
+  const track = page.getByRole("region", {
+    name: "How this cutoff's forecasts fared recently",
+  });
+  await expect(track).toContainText("The last 7 delivery days");
+  await expect(track).toContainText("2026-01-15 09:30 UTC");
+  await expect(track.locator(".track-days li")).toHaveCount(7);
+  await expect(track.locator(".track-days li").first()).toContainText(
+    "Wed 14 Jan",
+  );
+  // Still the decision view: no actual line or current-day error.
+  await expect(mode(page)).toContainText("Decision view");
+  await expect(page.locator(".key.actual")).toHaveCount(0);
+
+  await page.goto(
+    "/?view=replay&decision=2026-01-02&cutoff=09:30&rule=hour_mean&reveal=0",
+  );
+  await expect(
+    page.getByText(
+      "No complete delivery day had been published by this cutoff",
+    ),
+  ).toBeVisible();
+
+  await page.goto(
+    "/?view=replay&decision=2026-01-15&cutoff=09:30&rule=hour_mean&reveal=0",
+  );
+  await track
+    .getByRole("button", { name: "See the check in the Accuracy lab" })
+    .click();
+  const check = page.getByRole("region", {
+    name: "Was the recent track record a useful guide?",
+  });
+  await expect(check).toContainText("r = -0.40");
+  await expect(check).toContainText("1,689");
 });
