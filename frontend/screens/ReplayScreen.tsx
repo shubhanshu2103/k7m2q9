@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Area,
   Bar,
@@ -16,12 +16,14 @@ import {
 import { ArrowUpRight, Download, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import {
   query,
+  replayPath,
   useApi,
   type Point,
   type Replay,
   type TrackRecord,
 } from "../api";
 import type { Scenario } from "../scenario";
+import { CutoffTimeline } from "./CutoffTimeline";
 import {
   COLORS,
   dateLabel,
@@ -42,6 +44,7 @@ import {
   Notice,
   RulePicker,
   Stat,
+  useReducedMotion,
 } from "../ui";
 
 type Props = {
@@ -54,7 +57,10 @@ const PRIOR_DASH = ["6 4", "2 4", "10 4 2 4"];
 export function ReplayScreen({ scenario, onChange }: Props) {
   const { decision, cutoff, rule, reveal } = scenario;
   const params = query({ decision, cutoff, rule, reveal: String(reveal) });
-  const state = useApi<Replay>("/api/replay?" + params);
+  const state = useApi<Replay>(replayPath(scenario));
+  // Owned here so playback survives the body re-rendering for each new cutoff.
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => setPlaying(false), [decision, reveal]);
   return (
     <>
       <ModeBanner scenario={scenario} onChange={onChange} />
@@ -75,9 +81,11 @@ export function ReplayScreen({ scenario, onChange }: Props) {
         {(replay) => (
           <ReplayBody
             replay={replay}
-            reveal={reveal}
+            scenario={scenario}
             exportHref={"/api/export?" + params}
             onChange={onChange}
+            playing={playing}
+            setPlaying={setPlaying}
           />
         )}
       </Loadable>
@@ -134,15 +142,21 @@ function ModeBanner({ scenario, onChange }: Props) {
 
 function ReplayBody({
   replay,
-  reveal,
+  scenario,
   exportHref,
   onChange,
+  playing,
+  setPlaying,
 }: {
   replay: Replay;
-  reveal: boolean;
+  scenario: Scenario;
   exportHref: string;
   onChange: Props["onChange"];
+  playing: boolean;
+  setPlaying: (playing: boolean) => void;
 }) {
+  const reveal = scenario.reveal;
+  const animate = !useReducedMotion();
   const [showPrior, setShowPrior] = useState(true);
   const { points, coverage, prior_runs: prior } = replay;
   const newest = coverage.runs[coverage.runs.length - 1];
@@ -256,6 +270,14 @@ function ReplayBody({
         )}
       </div>
 
+      <CutoffTimeline
+        scenario={scenario}
+        dayRuns={replay.day_runs}
+        playing={playing}
+        setPlaying={setPlaying}
+        onChange={onChange}
+      />
+
       <section className="panel chart-panel">
         <div className="panel-head">
           <div>
@@ -364,7 +386,8 @@ function ReplayBody({
                 strokeWidth={2.5}
                 fill="url(#windArea)"
                 connectNulls={false}
-                isAnimationActive={false}
+                isAnimationActive={animate}
+                animationDuration={500}
               />
               {showPrior &&
                 prior.map((r, j) => (
@@ -377,7 +400,8 @@ function ReplayBody({
                     strokeDasharray={PRIOR_DASH[j]}
                     dot={false}
                     connectNulls={false}
-                    isAnimationActive={false}
+                    isAnimationActive={animate}
+                    animationDuration={500}
                   />
                 ))}
               {reveal && (
@@ -388,7 +412,8 @@ function ReplayBody({
                   strokeWidth={2.5}
                   dot={false}
                   connectNulls={false}
-                  isAnimationActive={false}
+                  isAnimationActive={animate}
+                  animationDuration={500}
                 />
               )}
             </ComposedChart>

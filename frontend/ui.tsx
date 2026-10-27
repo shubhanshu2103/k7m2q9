@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React, { useEffect, useState, type ReactNode } from "react";
 import { Info, RefreshCw, TriangleAlert } from "lucide-react";
 import type { Rule } from "./api";
 import { FIRST_DAY, LAST_DAY, shiftDay } from "./scenario";
@@ -174,4 +174,19 @@ export function RulePicker({
       </small>
     </div>
   );
+}
+
+/** True when the user has asked the system to minimise motion. */
+export function useReducedMotion() {
+  const query = "(prefers-reduced-motion: reduce)";
+  const [reduced, setReduced] = useState(
+    () => window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const onChange = () => setReduced(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
 }

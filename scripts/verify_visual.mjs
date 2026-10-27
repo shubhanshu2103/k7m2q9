@@ -1,5 +1,6 @@
 // Capture the served application for visual review. Needs a built frontend (npm run build)
 // and a backend on port 8000. Set PW_CHROMIUM_PATH to use a preinstalled Chromium.
+// Reduced motion keeps captures deterministic: chart animations would otherwise be mid-draw.
 import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
@@ -17,6 +18,7 @@ const shot = async (page, name) =>
 
 const desktop = await browser.newPage({
   viewport: { width: 1440, height: 1000 },
+  reducedMotion: "reduce",
 });
 await desktop.goto(base + "/");
 await desktop.locator(".run-list strong").first().waitFor();
@@ -30,7 +32,10 @@ await desktop.getByRole("button", { name: "02 Accuracy lab" }).click();
 await desktop.getByText("Lowest full-coverage MAE").waitFor();
 await shot(desktop, "analysis-desktop.png");
 
-const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const mobile = await browser.newPage({
+  viewport: { width: 390, height: 844 },
+  reducedMotion: "reduce",
+});
 await mobile.goto(base + "/");
 await mobile.locator(".run-list strong").first().waitFor();
 await shot(mobile, "replay-mobile.png");
@@ -38,7 +43,10 @@ await mobile.goto(base + "/?view=method");
 await mobile.locator(".source-list").waitFor();
 await shot(mobile, "method-mobile.png");
 
-const narrow = await browser.newPage({ viewport: { width: 320, height: 720 } });
+const narrow = await browser.newPage({
+  viewport: { width: 320, height: 720 },
+  reducedMotion: "reduce",
+});
 await narrow.goto(
   base +
     "/?view=replay&decision=2026-01-01&cutoff=01:00&rule=hour_mean&reveal=1",

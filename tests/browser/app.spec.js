@@ -186,6 +186,11 @@ for (const width of [320, 390, 1440])
       await page.goto(`/?view=${view}`);
       await expect(page.getByRole("status")).toHaveCount(0);
       await expect(page.getByRole("alert")).toHaveCount(0);
+      // A collapsed panel means a CSS class collision is squashing it.
+      const heights = await page
+        .locator("main .panel")
+        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+      expect(Math.min(...heights)).toBeGreaterThan(40);
       await page.locator("details summary").first().click();
       expect(
         await page.evaluate(
@@ -301,4 +306,75 @@ test("Lab key findings are derived from the data and link to their evidence", as
   // Findings follow the selected scenario rather than being hard-coded.
   await page.locator("#cutoff").fill("12:00");
   await expect(findings).not.toContainText("+1,730 MW on average");
+});
+
+test("cutoff timeline steps and plays through run publications", async ({
+  page,
+}) => {
+  await page.goto(
+    "/?view=replay&decision=2026-01-15&cutoff=09:30&rule=hour_mean&reveal=0",
+  );
+  const timeline = page.getByRole("region", {
+    name: "Watch the forecast arrive",
+  });
+  const stops = timeline.getByRole("list", {
+    name: "Set the cutoff to a run publication time",
+  });
+  // 12:25 is the delayed run; there is no 11:30 stop because nothing was published then.
+  await expect(stops.getByRole("button")).toHaveText([
+    "00:00 overnight",
+    "02:30",
+    "04:30",
+    "07:30",
+    "09:30",
+    "12:25",
+    "15:30",
+    "18:30",
+    "22:30",
+  ]);
+  await expect(stops.getByRole("button", { name: /09:30/ })).toHaveAttribute(
+    "aria-current",
+    "step",
+  );
+
+  await timeline.getByRole("button", { name: "Next run" }).click();
+  await expect(page.locator("#cutoff")).toHaveValue("12:25");
+  await expect(page.locator(".run-list strong")).toHaveText([
+    "2026-01-15 12:25 UTC",
+  ]);
+  await timeline.getByRole("button", { name: "Previous run" }).click();
+  await expect(page.locator("#cutoff")).toHaveValue("09:30");
+
+  // A stop is a new cutoff, so it leaves hindsight like any other cutoff change.
+  await page.getByRole("button", { name: "Reveal actuals" }).click();
+  await stops.getByRole("button", { name: /04:30/ }).click();
+  await expect(mode(page)).toContainText("Decision view");
+
+  await timeline.getByRole("button", { name: "Play the day" }).click();
+  await expect(page.locator("#cutoff")).toHaveValue("00:00");
+  await expect(page.locator("#cutoff")).toHaveValue("02:30", { timeout: 4000 });
+  await timeline.getByRole("button", { name: "Pause" }).click();
+  const paused = await page.locator("#cutoff").inputValue();
+  await page.waitForTimeout(1800);
+  await expect(page.locator("#cutoff")).toHaveValue(paused);
+});
+
+test("month heatmap shows every delivery hour and opens a day", async ({
+  page,
+}) => {
+  await page.goto("/?view=analysis&cutoff=09:30&rule=hour_mean");
+  const heatmap = page.getByRole("group", {
+    name: "Error by delivery day and hour",
+  });
+  await expect(heatmap.locator(".heat-cell")).toHaveCount(744);
+  await expect(heatmap.locator(".heat-day.worst")).toHaveCount(5);
+  await heatmap
+    .getByRole("button", { name: "Replay delivery Wed 28 Jan with hindsight" })
+    .click();
+  await expect(page).toHaveURL(/decision=2026-01-27/);
+  await expect(mode(page)).toContainText("Hindsight view");
+
+  // Missing pairs are drawn as gaps, never as zero error.
+  await page.goto("/?view=analysis&cutoff=01:00&rule=hour_mean");
+  await expect(heatmap.locator(".heat-cell.empty")).toHaveCount(62);
 });

@@ -279,6 +279,16 @@ class Store:
                 "fallback_intervals": sum(p["fallback"] for p in points),
             },
             "prior_runs": self._prior_runs(sc, candidates, set(runs)),
+            # Publication times only (no values) of runs on the purchase day that cover this
+            # delivery day. They drive the cutoff timeline: the selection can only change at
+            # these moments. Times after the cutoff are schedule metadata, not forecasts.
+            "day_runs": sorted(
+                {
+                    r["publishTime"]
+                    for r in candidates
+                    if r["publishTime"][:10] == sc.decision.isoformat()
+                }
+            ),
         }
         if reveal:
             out["metrics"] = metrics(points)
@@ -362,6 +372,8 @@ class Store:
             "hourly": hourly,
             "track_record_check": self._track_record_check(cutoff, rule, days),
             "by_level": by_level(points),
+            # Signed error per delivery day (rows) and target hour (columns); None when unpaired.
+            "grid": [[p["error"] for p in d["points"]] for d in days],
         }
 
     def _track_record_check(self, cutoff: str, rule: str, days: list[dict]) -> dict:
