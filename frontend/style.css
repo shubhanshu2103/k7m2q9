@@ -571,6 +571,9 @@ header {
 .key.swatch.over {
   background: var(--red);
 }
+.key.swatch.mae {
+  background: #7fae9f;
+}
 .key.swatch.under {
   background: #3d6fa8;
 }
@@ -885,6 +888,37 @@ header {
   font-size: 12px;
   color: var(--ink-3);
   letter-spacing: 0;
+}
+
+/* Key findings */
+.findings {
+  padding: 22px 24px;
+  border-left: 4px solid var(--green);
+}
+.findings ol {
+  margin: 12px 0 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 10px;
+}
+.findings li {
+  font-size: 14px;
+  color: var(--ink);
+}
+.findings li strong {
+  font-weight: 500;
+  margin-right: 8px;
+}
+.findings li a {
+  color: var(--green-strong);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.findings .fine-print.wide {
+  margin-top: 14px;
 }
 
 /* Track record */
@@ -1342,6 +1376,9 @@ footer {
   }
   .track-empty {
     padding: 12px 16px 16px;
+  }
+  .findings {
+    padding: 18px 16px;
   }
   .lesson,
   .shortfall,

@@ -1,4 +1,6 @@
-import sys, time, statistics
+import statistics
+import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -13,7 +15,9 @@ def bench(label, fn, runs):
         start = time.perf_counter()
         fn()
         times.append((time.perf_counter() - start) * 1000)
-    print(f"{label}, {runs} uncached local runs: median {statistics.median(times):.1f}ms, max {max(times):.1f}ms")
+    print(
+        f"{label}, {runs} uncached local runs: median {statistics.median(times):.1f}ms, max {max(times):.1f}ms"
+    )
 
 
 # The private methods bypass the per-process cache so the computation itself is timed.

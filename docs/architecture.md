@@ -61,6 +61,8 @@ A multistage image builds TypeScript and React, then copies only the assets and 
 - **Track record at decision time (third pass).** FUELHH rows carry their own `publishTime`, 30–145 minutes after each half-hour in this snapshot. So the decision view can show how the same cutoff's forecasts fared over recent complete delivery days using only actuals published by the cutoff. This is the legitimate decision-time version of "consider the quantified error".
   - **Backtested in the Lab before anyone relies on it.** Day to day it was not predictive in January (correlations −0.40 for bias, −0.52 for MAE over 29 days). A naive bias subtraction would have cut MAE by 14%, but that is in-sample and the bias's cause is unknown.
   - **What the UI does with that.** It shows the record as context with that caveat, and never shows an adjusted forecast.
+- **Error by forecast level (fourth pass).** The forecast value is known at decision time, so "how wrong were forecasts at this level?" is a question a buyer can actually look up. The answer is January hindsight, so it lives in the Lab, never in the decision view.
+- **Key findings computed, not written.** The Lab's summary statements are derived from the selected scenario's data and link to their evidence, so they cannot drift from the numbers.
 - **Drill-through over a new screen.** Poor days link to the exact replay with the same cutoff and rule, in an explicitly labelled hindsight mode. No new tab was added.
 
 ## Choices
@@ -93,7 +95,7 @@ Input handling:
 
 ## Known implementation compromises
 
-- **Locking.** Python direct dependencies are pinned, but transitive Python dependencies are not lockfile-frozen. Node's dependency graph is locked.
+- **Locking.** `constraints.txt` freezes the full Python dependency set, generated with Python 3.12, and CI and Docker install with it. Regenerate it in a clean environment when a direct dependency changes. Node's dependency graph is locked by `package-lock.json`.
 - **Snapshot refresh.** Refresh writes are not an atomic production transaction.
 - **Fonts.** Loaded from Google Fonts with system fallbacks.
 - **Bundle size.** The production JavaScript bundle is about 200 KB gzipped, mostly the chart library, and still triggers Vite's advisory size warning.

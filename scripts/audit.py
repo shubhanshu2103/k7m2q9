@@ -1,8 +1,9 @@
 """Independent deliberately simple cross-check of the default month's metrics."""
 
-import json, math
-from pathlib import Path
+import json
+import math
 from datetime import datetime, timedelta
+from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 wind = json.loads((root / "data/wind.json").read_text())
@@ -27,7 +28,14 @@ result = {
 }
 print(json.dumps(result, indent=2))
 # Documented baseline (README). Fails loudly if the snapshot or the method drifts.
-expected = {"n": 744, "mae": 2013.008064516129, "bias": 1729.9314516129032, "rmse": 2505.943149370381}
+expected = {
+    "n": 744,
+    "mae": 2013.008064516129,
+    "bias": 1729.9314516129032,
+    "rmse": 2505.943149370381,
+}
 assert result["n"] == expected["n"]
-assert all(math.isclose(result[k], expected[k], rel_tol=0, abs_tol=1e-9) for k in ["mae", "bias", "rmse"])
+assert all(
+    math.isclose(result[k], expected[k], rel_tol=0, abs_tol=1e-9) for k in ["mae", "bias", "rmse"]
+)
 print("Audit matches the documented baseline.")

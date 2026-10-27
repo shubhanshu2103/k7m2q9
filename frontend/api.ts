@@ -85,6 +85,12 @@ export type Analysis = {
   sensitivity: Metrics & { alternate_rule: Rule };
   days: Day[];
   hourly: (Metrics & { hour: string })[];
+  by_level: (Metrics & {
+    from_mw: number;
+    to_mw: number | null;
+    p90: number | null;
+    share_over: number | null;
+  })[];
   track_record_check: {
     days: number;
     bias_correlation: number | null;

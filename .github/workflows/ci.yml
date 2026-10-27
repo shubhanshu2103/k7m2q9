@@ -12,8 +12,11 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: pip install -r requirements-dev.txt
+      - run: pip install -r requirements-dev.txt -c constraints.txt
       - run: npm ci
+      - run: ruff check backend tests scripts
+      - run: ruff format --check backend tests scripts
+      - run: npm run format:check
       - run: python -m pytest -q
       - run: python scripts/audit.py
       - run: npm run build

@@ -15,6 +15,18 @@ These results apply to that commit only. The second pass does not inherit them.
 
 Pushed to `second-pass-decision-workbench`. GitHub Actions [run 40546173350](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40546173350) on commit `8f3746b` passed every step on Python 3.12 and Ubuntu: pytest (37), the audit, the production build, Playwright (12), the Docker image build, and the container health and replay smoke. This resolves the local Docker gap noted below.
 
+## Fourth pass (local, 27 October 2026)
+
+- **Python.** 44 pytest pass under Python 3.13 and, in a clean venv installed with `-c constraints.txt`, under Python 3.12. New tests cover forecast-level bands partitioning paired hours, and the real band values.
+- **Lint and formatting.** `ruff check` (explicit rule set E4, E7, E9, F, I, UP, B) and `ruff format --check` pass after a formatting and import-sorting change. `npm run format:check` (Prettier) passes.
+- **Browser.** 14 Playwright pass. New: the findings summary is computed from the selected scenario, its evidence link reaches the forecast-level panel, and it changes with the cutoff.
+- **Visual inspection.** The new Lab panels were checked at 1440 and 320px. Fixed after review: the band chart's axis labels collided at 320px.
+- **Docker.** Not verified locally. Docker Hub rate-limited the base images (HTTP 429). On the one attempt that pulled them, `pip install` failed inside the build, most likely because the build container cannot use this sandbox's network proxy: the same install succeeds in a clean Python 3.12 venv here. CI's Docker step is the check for the constraints change.
+
+## Third pass in CI
+
+[Run 40549449242](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40549449242) on commit `58c2327` passed every step, including Docker.
+
 ## Third pass (local, 27 October 2026)
 
 - **Formatting.** A Prettier-only commit formats the frontend and browser tests; no behaviour change.

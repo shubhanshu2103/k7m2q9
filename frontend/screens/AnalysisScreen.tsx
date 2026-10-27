@@ -125,6 +125,8 @@ function AnalysisBody({
         />
       </div>
 
+      <KeyFindings analysis={a} worst={worst} cutoff={scenario.cutoff} />
+
       <section className="panel shortfall" aria-labelledby="shortfall-title">
         <div>
           <span className="eyebrow">Reading the error for buying</span>
@@ -175,10 +177,12 @@ function AnalysisBody({
         </p>
       </section>
 
+      <LevelPanel bands={a.by_level} />
+
       <section className="panel">
         <div className="panel-head">
           <div>
-            <h2>Which days went wrong?</h2>
+            <h2 id="days-title">Which days went wrong?</h2>
             <p>
               Mean absolute error per delivery day, MW. Select a bar or a listed
               day to replay it with hindsight.
@@ -530,6 +534,191 @@ function CutoffSweep({
           );
         }}
       </Loadable>
+    </section>
+  );
+}
+
+const band = (b: Analysis["by_level"][number]) =>
+  b.to_mw == null
+    ? `≥ ${fmt(b.from_mw / 1000)} GW`
+    : b.from_mw === 0
+      ? `< ${fmt(b.to_mw / 1000)} GW`
+      : `${fmt(b.from_mw / 1000)}–${fmt(b.to_mw / 1000)} GW`;
+
+/** Four data-derived statements, each pointing at the panel that evidences it. */
+function KeyFindings({
+  analysis: a,
+  worst,
+  cutoff,
+}: {
+  analysis: Analysis;
+  worst: Day[];
+  cutoff: string;
+}) {
+  const total = a.days.reduce((sum, d) => sum + (d.mae ?? 0) * d.n, 0);
+  const worstShare = total
+    ? worst.reduce((sum, d) => sum + (d.mae ?? 0) * d.n, 0) / total
+    : null;
+  const bands = a.by_level.filter((b) => b.n > 0);
+  const low = bands[0];
+  const high = bands[bands.length - 1];
+  const c = a.track_record_check;
+  const adjusted =
+    c.mae && c.adjusted_mae != null ? (c.adjusted_mae - c.mae) / c.mae : null;
+  return (
+    <section className="panel findings" aria-labelledby="findings-title">
+      <span className="eyebrow">January at {cutoff} UTC · hindsight</span>
+      <h2 id="findings-title">What the pilot found</h2>
+      <ol>
+        <li>
+          <strong>
+            The forecast ran high: {signed(a.metrics.bias)} MW on average, with{" "}
+            {pct(a.distribution.share_over)} of hours over-forecast.
+          </strong>
+          <a href="#shortfall-title">Shortfall detail</a>
+        </li>
+        {low && high && low !== high && (
+          <li>
+            <strong>
+              The windier the forecast, the bigger the overstatement: bias{" "}
+              {signed(high.bias)} MW when it said {band(high)}, versus{" "}
+              {signed(low.bias)} MW at {band(low)}.
+            </strong>
+            <a href="#level-title">By forecast level</a>
+          </li>
+        )}
+        {worstShare != null && (
+          <li>
+            <strong>
+              A few days dominate: the {worst.length} worst days carried{" "}
+              {pct(worstShare)} of all absolute error.
+            </strong>
+            <a href="#days-title">Worst days</a>
+          </li>
+        )}
+        {c.days > 0 && (
+          <li>
+            <strong>
+              A bad recent week did not predict a bad next day (r ={" "}
+              {fmt(c.bias_correlation, 2)}), but the bias was steady enough that
+              subtracting it would have changed MAE by{" "}
+              {adjusted == null
+                ? "N/A"
+                : `${adjusted < 0 ? "−" : "+"}${Math.abs(Math.round(adjusted * 100))}%`}
+              .
+            </strong>
+            <a href="#check-title">Backtest</a>
+          </li>
+        )}
+      </ol>
+      <p className="fine-print wide">
+        One month, one cutoff, one comparison assumption. These are findings to
+        investigate with the team, not rules for buying.
+      </p>
+    </section>
+  );
+}
+
+function LevelPanel({ bands }: { bands: Analysis["by_level"] }) {
+  const rows = bands.map((b) => ({ ...b, label: band(b) }));
+  return (
+    <section className="panel" aria-labelledby="level-title">
+      <div className="panel-head">
+        <div>
+          <h2 id="level-title">
+            Does the miss depend on how windy the forecast was?
+          </h2>
+          <p>
+            Paired hours grouped by the forecast value itself, which is known at
+            decision time. Bands in GW of forecast; values in MW, above zero
+            means the forecast was too high.
+          </p>
+        </div>
+        <div className="legend" aria-label="Chart legend">
+          <span>
+            <i className="key swatch mae" aria-hidden /> MAE
+          </span>
+          <span>
+            <i className="key swatch over" aria-hidden /> Signed bias
+          </span>
+        </div>
+      </div>
+      <div
+        className="chart short"
+        role="img"
+        aria-label="MAE and bias by forecast band. Values are listed below the chart."
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={rows}
+            margin={{ top: 12, right: 24, left: 4, bottom: 4 }}
+          >
+            <CartesianGrid vertical={false} stroke="#e6e7e5" />
+            <XAxis
+              dataKey="label"
+              interval={0}
+              tickFormatter={(l: string) => l.replace(" GW", "")}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 11 }}
+            />
+            <YAxis
+              width={58}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => fmt(v)}
+              tick={{ fontSize: 12 }}
+            />
+            <ReferenceLine y={0} stroke="#4a4547" />
+            <Tooltip
+              formatter={(v, name) => [
+                `${name === "bias" ? signed(Number(v)) : fmt(Number(v))} MW`,
+                name === "bias" ? "Bias" : "MAE",
+              ]}
+              labelFormatter={(l) => `Forecast ${l}`}
+            />
+            <Bar dataKey="mae" fill="#7fae9f" isAnimationActive={false} />
+            <Bar dataKey="bias" fill={COLORS.over} isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="table-wrap">
+        <table className="cards">
+          <thead>
+            <tr>
+              <th scope="col">Forecast</th>
+              <th scope="col">Hours</th>
+              <th scope="col">MAE MW</th>
+              <th scope="col">Bias MW</th>
+              <th scope="col">Too high</th>
+              <th scope="col">1 in 10 shortfall above</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((b) => (
+              <tr key={b.label}>
+                <th scope="row" data-label="Forecast">
+                  {b.label}
+                </th>
+                <td data-label="Hours">{b.n}</td>
+                <td data-label="MAE MW">{fmt(b.mae)}</td>
+                <td data-label="Bias MW">{signed(b.bias)}</td>
+                <td data-label="Too high">{pct(b.share_over)}</td>
+                <td data-label="1 in 10 shortfall above">
+                  {b.p90 != null && b.p90 > 0 ? `${fmt(b.p90)} MW` : "0"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="chart-foot">
+        <span>
+          Consistent with curtailment at high output or a fleet-scope difference
+          between the two datasets, but this data cannot tell which. Bands with
+          few hours are less reliable; n is shown for each.
+        </span>
+      </p>
     </section>
   );
 }

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from collections import defaultdict, Counter
+import json
+import math
+import re
+import statistics
+from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, date
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Literal
-import json, math, re, statistics
+from typing import Any, Literal
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +24,9 @@ FIRST_DECISION, LAST_DECISION = date(2026, 1, 1), date(2026, 1, 31)
 SWEEP_CUTOFFS = tuple(f"{h:02}:00" for h in range(24))
 # Earlier runs shown beside the selected one. Enough to see drift without a spaghetti chart.
 PRIOR_RUNS = 3
+# Forecast-level bands (MW) for the "does the miss depend on the forecast?" view. Round
+# numbers a buyer can read at a glance; each band reports its own n.
+LEVEL_BANDS = ((0, 5000), (5000, 10000), (10000, 15000), (15000, None))
 # Recent delivery days summarised in the decision view's track record.
 TRACK_DAYS = 7
 
@@ -117,6 +124,30 @@ def distribution(points: Iterable[dict]) -> dict:
     }
 
 
+def by_level(points: list[dict]) -> list[dict]:
+    """Paired errors grouped by the forecast's own level, which is known at decision time."""
+    out = []
+    for lo, hi in LEVEL_BANDS:
+        band = [
+            p
+            for p in points
+            if p.get("error") is not None
+            and lo <= p["forecast"]
+            and (hi is None or p["forecast"] < hi)
+        ]
+        d = distribution(band)
+        out.append(
+            {
+                "from_mw": lo,
+                "to_mw": hi,
+                **metrics(band),
+                "p90": d["p90"],
+                "share_over": d["share_over"],
+            }
+        )
+    return out
+
+
 @dataclass(frozen=True)
 class Scenario:
     decision: date
@@ -204,7 +235,9 @@ class Store:
             for p in earlier
         ]
 
-    def replay(self, decision: str, cutoff: str = "09:30", rule: str = "hour_mean", reveal: bool = False):
+    def replay(
+        self, decision: str, cutoff: str = "09:30", rule: str = "hour_mean", reveal: bool = False
+    ):
         sc = parse_scenario(decision, cutoff, rule)
         targets = sc.targets
         candidates = [r for t in targets for r in self.by_target[t]]
@@ -264,7 +297,11 @@ class Store:
             paired = []
             for p in past["points"]:
                 value, _ = self._actual_for(p["time"], sc.rule, available_by=sc.gate)
-                error = p["forecast"] - value if p["forecast"] is not None and value is not None else None
+                error = (
+                    p["forecast"] - value
+                    if p["forecast"] is not None and value is not None
+                    else None
+                )
                 paired.append({**p, "actual": value, "error": error})
             # Only complete days: a half-reported day would bias the summary towards the night.
             if all(p["error"] is not None for p in paired):
@@ -324,6 +361,7 @@ class Store:
             ],
             "hourly": hourly,
             "track_record_check": self._track_record_check(cutoff, rule, days),
+            "by_level": by_level(points),
         }
 
     def _track_record_check(self, cutoff: str, rule: str, days: list[dict]) -> dict:
@@ -348,7 +386,9 @@ class Store:
             if len(pairs) < 3:
                 return None
             try:
-                return statistics.correlation([r[key] for r, _ in pairs], [d[key] for _, d in pairs])
+                return statistics.correlation(
+                    [r[key] for r, _ in pairs], [d[key] for _, d in pairs]
+                )
             except statistics.StatisticsError:
                 return None
 
