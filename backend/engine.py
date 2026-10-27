@@ -1,27 +1,41 @@
 """Point-in-time selection. No interpolation or forward-filling of forecasts."""
 
+from __future__ import annotations
+
 from collections import defaultdict, Counter
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, date
+from functools import lru_cache
 from pathlib import Path
+from typing import Any, Iterable, Literal
 import json, math, re
 
 ROOT = Path(__file__).resolve().parents[1]
 
+Rule = Literal["hour_mean", "first_half"]
+RULES: tuple[Rule, ...] = ("hour_mean", "first_half")
+FIRST_DECISION, LAST_DECISION = date(2026, 1, 1), date(2026, 1, 31)
+# Hourly decision times for the cutoff sensitivity sweep. Runs are usually published at :30,
+# so on-the-hour cutoffs show the step each new run makes rather than hugging a schedule.
+SWEEP_CUTOFFS = tuple(f"{h:02}:00" for h in range(24))
+# Earlier runs shown beside the selected one. Enough to see drift without a spaghetti chart.
+PRIOR_RUNS = 3
 
-def timestamp(value):
+
+def timestamp(value: str) -> datetime:
     dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if dt.tzinfo is None:
         raise ValueError("Timezone is required")
     return dt.astimezone(timezone.utc)
 
 
-def iso(dt):
+def iso(dt: datetime) -> str:
     return dt.isoformat().replace("+00:00", "Z")
 
 
-def normalize(payload):
+def normalize(payload: Any) -> list[dict]:
     rows = payload if isinstance(payload, list) else payload["data"]
-    out = {}
+    out: dict[tuple, dict] = {}
     for r in rows:
         p, s = timestamp(r["publishTime"]), timestamp(r["startTime"])
         g = r["generation"]
@@ -34,9 +48,9 @@ def normalize(payload):
     return list(out.values())
 
 
-def select_forecasts(rows, targets, cutoff):
+def select_forecasts(rows: Iterable[dict], targets: list[str], cutoff: datetime) -> dict[str, dict]:
     """Latest eligible vintage independently for every target, inclusive boundary."""
-    chosen = {}
+    chosen: dict[str, dict] = {}
     target_set = set(targets)
     for r in rows:
         p = timestamp(r["publishTime"])
@@ -50,8 +64,8 @@ def select_forecasts(rows, targets, cutoff):
     return chosen
 
 
-def latest_actuals(rows):
-    chosen = {}
+def latest_actuals(rows: Iterable[dict]) -> dict[str, dict]:
+    chosen: dict[str, dict] = {}
     for r in rows:
         if r.get("fuelType") != "WIND":
             continue
@@ -61,7 +75,7 @@ def latest_actuals(rows):
     return chosen
 
 
-def metrics(points):
+def metrics(points: Iterable[dict]) -> dict:
     errors = [p["error"] for p in points if p.get("error") is not None]
     if not errors:
         return {"n": 0, "mae": None, "bias": None, "rmse": None, "max_abs_error": None}
@@ -74,8 +88,68 @@ def metrics(points):
     }
 
 
+def quantile(values: list[float], q: float) -> float | None:
+    """Linear interpolation between closest ranks (same as numpy's default)."""
+    if not values:
+        return None
+    xs = sorted(values)
+    pos = (len(xs) - 1) * q
+    lo, hi = math.floor(pos), math.ceil(pos)
+    return xs[lo] + (xs[hi] - xs[lo]) * (pos - lo)
+
+
+def distribution(points: Iterable[dict]) -> dict:
+    """Empirical spread of paired errors (forecast minus actual) for a retrospective period.
+
+    Describes what happened in the sample; it is not a calibrated forecast interval.
+    """
+    errors = [p["error"] for p in points if p.get("error") is not None]
+    return {
+        "n": len(errors),
+        "p10": quantile(errors, 0.1),
+        "p50": quantile(errors, 0.5),
+        "p90": quantile(errors, 0.9),
+        "abs_p50": quantile([abs(e) for e in errors], 0.5),
+        "abs_p90": quantile([abs(e) for e in errors], 0.9),
+        "share_over": sum(e > 0 for e in errors) / len(errors) if errors else None,
+    }
+
+
+@dataclass(frozen=True)
+class Scenario:
+    decision: date
+    gate: datetime
+    delivery: datetime
+    rule: Rule
+
+    @property
+    def targets(self) -> list[str]:
+        return [iso(self.delivery + timedelta(hours=i)) for i in range(24)]
+
+
+def parse_scenario(decision: str, cutoff: str, rule: str) -> Scenario:
+    """Validation boundary for every scenario. Raises ValueError with a user-facing message."""
+    try:
+        d = date.fromisoformat(decision)
+    except (TypeError, ValueError):
+        raise ValueError("Decision date must be YYYY-MM-DD") from None
+    if not FIRST_DECISION <= d <= LAST_DECISION:
+        raise ValueError("Decision date must be in January 2026")
+    if not re.fullmatch(r"\d{2}:\d{2}", cutoff):
+        raise ValueError("Cutoff must be HH:MM")
+    h, m = map(int, cutoff.split(":"))
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        raise ValueError("Cutoff must be HH:MM")
+    if rule not in RULES:
+        raise ValueError("Unknown comparison rule")
+    gate = datetime(d.year, d.month, d.day, h, m, tzinfo=timezone.utc)
+    # January is GMT throughout, so the next UK calendar day starts at UTC midnight.
+    delivery = gate.replace(hour=0, minute=0) + timedelta(days=1)
+    return Scenario(d, gate, delivery, rule)  # type: ignore[arg-type]
+
+
 class Store:
-    def __init__(self, wind=None, actual=None):
+    def __init__(self, wind: Any = None, actual: Any = None):
         self.wind = normalize(
             wind if wind is not None else json.loads((ROOT / "data/wind.json").read_text())
         )
@@ -83,26 +157,44 @@ class Store:
             actual if actual is not None else json.loads((ROOT / "data/actual.json").read_text())
         )
         self.actual = latest_actuals(self.raw_actual)
-        self.by_target = defaultdict(list)
+        self.by_target: dict[str, list[dict]] = defaultdict(list)
         for r in self.wind:
             self.by_target[r["startTime"]].append(r)
+        # The snapshot is immutable for the life of the process, so full-month sweeps are cached.
+        self.analysis = lru_cache(maxsize=64)(self._analysis)
+        self.cutoff_sweep = lru_cache(maxsize=4)(self._cutoff_sweep)
 
-    def replay(self, decision, cutoff="09:30", rule="hour_mean", reveal=False):
-        d = date.fromisoformat(decision)
-        if not date(2026, 1, 1) <= d <= date(2026, 1, 31):
-            raise ValueError("Decision date must be in January 2026")
-        if not re.fullmatch(r"\d{2}:\d{2}", cutoff):
-            raise ValueError("Cutoff must be HH:MM")
-        h, m = map(int, cutoff.split(":"))
-        if not (0 <= h <= 23 and 0 <= m <= 59) or len(cutoff) != 5:
-            raise ValueError("Cutoff must be HH:MM")
-        if rule not in ("hour_mean", "first_half"):
-            raise ValueError("Unknown comparison rule")
-        gate = datetime(d.year, d.month, d.day, h, m, tzinfo=timezone.utc)
-        delivery = gate.replace(hour=0, minute=0) + timedelta(days=1)
-        targets = [iso(delivery + timedelta(hours=i)) for i in range(24)]
+    def _actual_for(self, t: str, rule: Rule) -> tuple[float | None, list[str]]:
+        a = self.actual.get(t)
+        if rule == "first_half":
+            return (a["generation"] if a else None), [a["publishTime"]] if a else []
+        b = self.actual.get(iso(timestamp(t) + timedelta(minutes=30)))
+        value = (a["generation"] + b["generation"]) / 2 if a and b else None
+        return value, [r["publishTime"] for r in (a, b) if r]
+
+    def _prior_runs(self, sc: Scenario, candidates: list[dict], selected_runs: set[str]) -> list:
+        """Earlier eligible runs for the same delivery targets: what a buyer could already see."""
+        by_run: dict[str, dict[str, float]] = defaultdict(dict)
+        for r in candidates:
+            if timestamp(r["publishTime"]) <= sc.gate:
+                by_run[r["publishTime"]][r["startTime"]] = r["generation"]
+        earlier = sorted((p for p in by_run if p not in selected_runs), reverse=True)
+        newest = max(selected_runs, default=None)
+        earlier = [p for p in earlier if newest is None or p < newest][:PRIOR_RUNS]
+        return [
+            {
+                "publishTime": p,
+                "targets": len(by_run[p]),
+                "points": [by_run[p].get(t) for t in sc.targets],
+            }
+            for p in earlier
+        ]
+
+    def replay(self, decision: str, cutoff: str = "09:30", rule: str = "hour_mean", reveal: bool = False):
+        sc = parse_scenario(decision, cutoff, rule)
+        targets = sc.targets
         candidates = [r for t in targets for r in self.by_target[t]]
-        selected = select_forecasts(candidates, targets, gate)
+        selected = select_forecasts(candidates, targets, sc.gate)
         newest = max((r["publishTime"] for r in selected.values()), default=None)
         points = []
         for t in targets:
@@ -113,56 +205,51 @@ class Store:
                 "forecast": f["generation"] if f else None,
                 "publishTime": f["publishTime"] if f else None,
                 "fallback": bool(f and f["publishTime"] != newest),
-                "age_hours": (gate - timestamp(f["publishTime"])).total_seconds() / 3600
+                "age_hours": (sc.gate - timestamp(f["publishTime"])).total_seconds() / 3600
                 if f
                 else None,
             }
             if reveal:
-                a, b = (
-                    self.actual.get(t),
-                    self.actual.get(iso(timestamp(t) + timedelta(minutes=30))),
-                )
-                value = (
-                    ((a["generation"] + b["generation"]) / 2 if a and b else None)
-                    if rule == "hour_mean"
-                    else (a["generation"] if a else None)
-                )
+                value, published = self._actual_for(t, sc.rule)
                 row.update(
                     actual=value,
-                    actual_publishTimes=[
-                        r["publishTime"] for r in ([a, b] if rule == "hour_mean" else [a]) if r
-                    ],
+                    actual_publishTimes=published,
                     error=f["generation"] - value if f and value is not None else None,
                 )
             points.append(row)
+        runs = sorted({r["publishTime"] for r in selected.values()})
         out = {
-            "decision_date": decision,
-            "delivery_date": delivery.date().isoformat(),
-            "cutoff": iso(gate),
+            "decision_date": sc.decision.isoformat(),
+            "delivery_date": sc.delivery.date().isoformat(),
+            "cutoff": iso(sc.gate),
             "timezone": "Europe/London (GMT in January)",
-            "rule": rule,
+            "rule": sc.rule,
             "points": points,
             "coverage": {
                 "forecast": len(selected),
                 "expected": 24,
-                "runs": sorted({r["publishTime"] for r in selected.values()}),
+                "runs": runs,
                 "fallback_intervals": sum(p["fallback"] for p in points),
             },
+            "prior_runs": self._prior_runs(sc, candidates, set(runs)),
         }
         if reveal:
             out["metrics"] = metrics(points)
             out["coverage"]["actual"] = sum(p["actual"] is not None for p in points)
         return out
 
-    def analysis(self, cutoff="09:30", rule="hour_mean"):
-        days = [self.replay(f"2026-01-{i:02}", cutoff, rule, True) for i in range(1, 32)]
+    def _month(self, cutoff: str, rule: str) -> list[dict]:
+        return [
+            self.replay(d.isoformat(), cutoff, rule, True)
+            for d in (FIRST_DECISION + timedelta(days=i) for i in range(31))
+        ]
+
+    def _analysis(self, cutoff: str = "09:30", rule: str = "hour_mean") -> dict:
+        parse_scenario(FIRST_DECISION.isoformat(), cutoff, rule)
+        days = self._month(cutoff, rule)
         points = [p for d in days for p in d["points"]]
         other = "first_half" if rule == "hour_mean" else "hour_mean"
-        alternate = [
-            p
-            for i in range(1, 32)
-            for p in self.replay(f"2026-01-{i:02}", cutoff, other, True)["points"]
-        ]
+        alternate = [p for d in self._month(cutoff, other) for p in d["points"]]
         hourly = [
             {
                 "hour": f"{h:02}:00",
@@ -172,7 +259,9 @@ class Store:
         ]
         return {
             "metrics": metrics(points),
+            "distribution": distribution(points),
             "expected": 744,
+            "cutoff": cutoff,
             "rule": rule,
             "sensitivity": {"alternate_rule": other, **metrics(alternate)},
             "days": [
@@ -187,7 +276,25 @@ class Store:
             "hourly": hourly,
         }
 
-    def metadata(self):
+    def _cutoff_sweep(self, rule: str = "hour_mean") -> dict:
+        """Month metrics if every decision had been taken at each hourly cutoff instead."""
+        parse_scenario(FIRST_DECISION.isoformat(), "00:00", rule)
+        rows = []
+        for cutoff in SWEEP_CUTOFFS:
+            days = self._month(cutoff, rule)
+            points = [p for d in days for p in d["points"]]
+            ages = [p["age_hours"] for p in points if p["age_hours"] is not None]
+            rows.append(
+                {
+                    "cutoff": cutoff,
+                    **metrics(points),
+                    "forecast_coverage": sum(d["coverage"]["forecast"] for d in days),
+                    "mean_age_hours": sum(ages) / len(ages) if ages else None,
+                }
+            )
+        return {"rule": rule, "expected": 744, "cutoffs": rows}
+
+    def metadata(self) -> dict:
         per_day = defaultdict(list)
         for r in self.wind:
             per_day[r["publishTime"][:10]].append(r)
