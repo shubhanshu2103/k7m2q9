@@ -124,7 +124,11 @@ type State<T> = { path: string | null; data: T | null; error: string };
  * slower response for an older scenario can never be shown for a newer one.
  */
 export function useApi<T>(path: string | null) {
-  const [state, setState] = useState<State<T>>({ path: null, data: null, error: "" });
+  const [state, setState] = useState<State<T>>({
+    path: null,
+    data: null,
+    error: "",
+  });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {

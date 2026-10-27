@@ -1,12 +1,25 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronRight, Wind } from "lucide-react";
-import { change, fromSearch, toSearch, type Scenario, type View } from "./scenario";
+import {
+  change,
+  fromSearch,
+  toSearch,
+  type Scenario,
+  type View,
+} from "./scenario";
 import { ReplayScreen } from "./screens/ReplayScreen";
 import { AnalysisScreen } from "./screens/AnalysisScreen";
 import { MethodScreen } from "./screens/MethodScreen";
 import { Notice } from "./ui";
 
-const SCREENS: { view: View; label: string; num: string; eyebrow: string; title: string; subtitle: string }[] = [
+const SCREENS: {
+  view: View;
+  label: string;
+  num: string;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+}[] = [
   {
     view: "replay",
     label: "Decision replay",
@@ -121,13 +134,16 @@ export function App() {
             <br />
             Elexon WINDFOR + FUELHH
           </p>
-          <p className="side-note">Decision support for a pilot. Not a procurement recommendation.</p>
+          <p className="side-note">
+            Decision support for a pilot. Not a procurement recommendation.
+          </p>
         </div>
       </aside>
       <main id="content">
         <header>
           <div className="breadcrumb">
-            Wind intelligence <ChevronRight size={14} aria-hidden /> {screen.label}
+            Wind intelligence <ChevronRight size={14} aria-hidden />{" "}
+            {screen.label}
           </div>
           <div className="snapshot-tag">
             Jan 2026 <span aria-hidden>•</span> times in UTC = GMT
@@ -149,16 +165,23 @@ export function App() {
         </section>
         {invalid.length > 0 && (
           <Notice tone="warn">
-            This link contained invalid {invalid.join(", ")} value{invalid.length > 1 ? "s" : ""}.
-            The default{invalid.length > 1 ? "s are" : " is"} shown instead.
+            This link contained invalid {invalid.join(", ")} value
+            {invalid.length > 1 ? "s" : ""}. The default
+            {invalid.length > 1 ? "s are" : " is"} shown instead.
           </Notice>
         )}
-        {scenario.view === "replay" && <ReplayScreen scenario={scenario} onChange={update} />}
-        {scenario.view === "analysis" && <AnalysisScreen scenario={scenario} onChange={update} />}
+        {scenario.view === "replay" && (
+          <ReplayScreen scenario={scenario} onChange={update} />
+        )}
+        {scenario.view === "analysis" && (
+          <AnalysisScreen scenario={scenario} onChange={update} />
+        )}
         {scenario.view === "method" && <MethodScreen />}
         <footer>
           <span>Wind replay · January 2026 pilot</span>
-          <span>*GB transmission / operationally metered wind. Not total UK wind.</span>
+          <span>
+            *GB transmission / operationally metered wind. Not total UK wind.
+          </span>
         </footer>
       </main>
     </div>

@@ -38,7 +38,11 @@ export function Notice({
 }) {
   return (
     <div className={"notice " + tone}>
-      {tone === "warn" ? <TriangleAlert size={17} aria-hidden /> : <Info size={17} aria-hidden />}
+      {tone === "warn" ? (
+        <TriangleAlert size={17} aria-hidden />
+      ) : (
+        <Info size={17} aria-hidden />
+      )}
       <div>{children}</div>
     </div>
   );
@@ -67,7 +71,8 @@ export function Loadable<T>({
   if (!state.data)
     return (
       <div className="loading" role="status">
-        <RefreshCw className="spin" size={20} aria-hidden /> Loading {label.toLowerCase()}…
+        <RefreshCw className="spin" size={20} aria-hidden /> Loading{" "}
+        {label.toLowerCase()}…
       </div>
     );
   return <>{children(state.data)}</>;
@@ -156,11 +161,17 @@ export function RulePicker({
       <label htmlFor="rule">
         Actuals comparison <span className="tag">Assumption</span>
       </label>
-      <select id="rule" value={value} onChange={(e) => onChange(e.target.value as Rule)}>
+      <select
+        id="rule"
+        value={value}
+        onChange={(e) => onChange(e.target.value as Rule)}
+      >
         <option value="hour_mean">Mean of both half-hours</option>
         <option value="first_half">First half-hour only</option>
       </select>
-      <small>How an hourly forecast is matched to half-hour actuals. Provisional.</small>
+      <small>
+        How an hourly forecast is matched to half-hour actuals. Provisional.
+      </small>
     </div>
   );
 }

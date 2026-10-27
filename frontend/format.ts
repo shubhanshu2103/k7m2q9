@@ -8,7 +8,9 @@ export const fmt = (v: number | null | undefined, digits = 0) =>
 
 /** Signed MW with an explicit plus, so over-forecast is never inferred from colour alone. */
 export const signed = (v: number | null | undefined, digits = 0) =>
-  v == null ? "N/A" : (v > 0 ? "+" : v < 0 ? "−" : "") + fmt(Math.abs(v), digits);
+  v == null
+    ? "N/A"
+    : (v > 0 ? "+" : v < 0 ? "−" : "") + fmt(Math.abs(v), digits);
 
 export const pct = (v: number | null | undefined) =>
   v == null ? "N/A" : Math.round(v * 100) + "%";
@@ -28,7 +30,8 @@ export const weekdayLabel = (s: string) =>
     timeZone: "UTC",
   });
 
-export const stamp = (s: string) => s.slice(0, 10) + " " + s.slice(11, 16) + " UTC";
+export const stamp = (s: string) =>
+  s.slice(0, 10) + " " + s.slice(11, 16) + " UTC";
 
 /** Short form for runs: "15 Jan 09:30". */
 export const runLabel = (s: string) => dateLabel(s) + " " + s.slice(11, 16);
@@ -47,4 +50,10 @@ export const errorWord = (e: number) =>
   e > 0 ? "over-forecast" : e < 0 ? "under-forecast" : "exact";
 
 // Chart palette. Over/under-forecast also carry a sign and words, never colour alone.
-export const COLORS = { forecast: "#2f6f60", actual: "#b85d1c", prior: "#7d817f", over: "#a8473f", under: "#3d6fa8" };
+export const COLORS = {
+  forecast: "#2f6f60",
+  actual: "#b85d1c",
+  prior: "#7d817f",
+  over: "#a8473f",
+  under: "#3d6fa8",
+};

@@ -575,7 +575,11 @@ header {
   background: #3d6fa8;
 }
 .key.bias {
-  background: repeating-linear-gradient(90deg, var(--red) 0 5px, transparent 5px 9px);
+  background: repeating-linear-gradient(
+    90deg,
+    var(--red) 0 5px,
+    transparent 5px 9px
+  );
 }
 .toggle {
   display: flex;
