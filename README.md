@@ -6,7 +6,8 @@ A January 2026 wind-forecast workbench for a UK day-ahead purchasing team. It an
 
 - **Repository.** Public at https://github.com/shubhanshu2103/k7m2q9.
 - **First version.** GitHub Actions passed for commit `5276489`: [run 40538346465](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40538346465). That run covered pytest, the production build, Playwright, and a Docker image build with a container health/replay smoke.
-- **Second pass.** Described below. It was verified locally (see [Verify](#verify)) but has **not yet been pushed, so CI has not run on it**. A local Docker rebuild of the second pass was blocked by Docker Hub rate limiting (HTTP 429) in the authoring environment.
+- **Second pass.** Pushed to branch `second-pass-decision-workbench`; GitHub Actions passed every step for commit `8f3746b`, including the Docker build and container smoke: [run 40546173350](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40546173350). `main` still points at the first version.
+- **Third pass.** The decision-time track record and its backtest, described below. Verified locally (see [Verify](#verify)); CI has not run on it until it is pushed.
 - **Still pending.** Vercel/Heroku deployment: **no deployed application link exists yet**. Also pending: the demo video and the form submission.
 
 ## Product
@@ -17,6 +18,7 @@ The app has three screens, and every scenario is kept in the URL so a view can b
   - **Forecast used.** The 24 hourly forecasts for the next UK day, chosen per target from runs published at or before the cutoff.
   - **Provenance.** The run used, its age and lead times, and which targets have no eligible forecast. Missing targets are left blank.
   - **Earlier runs and revision.** Up to three earlier eligible runs are drawn beside the chosen one, with the mean and largest change since the previous run. A buyer can see whether the outlook was moving, with no hindsight.
+  - **Track record known at decision time.** How forecasts at the same cutoff fared over the last seven complete delivery days: MAE, bias, bias by hour and each day. It counts only actuals whose own `publishTime` is at or before the cutoff, so it was genuinely knowable when deciding. It is labelled as context, not a prediction or a correction.
   - **Export.** The decision export contains no actuals.
 - **Hindsight is a separate, labelled mode.** "Reveal actuals" switches to an amber *Hindsight view* with MAE, signed bias, the largest miss and a per-hour error chart.
   - Changing the day or the cutoff starts a new decision and returns to the forecast-only view, so hindsight cannot silently carry over.
@@ -26,6 +28,7 @@ The app has three screens, and every scenario is kept in the URL so a view can b
   - **Shortfall summary.** How often, and by how much, wind came in below the as-of forecast (percentiles of signed error).
   - **Bad days.** Daily error chart with the five worst days. Clicking a bar or a listed day opens that exact replay in hindsight mode with the same cutoff and rule.
   - **Cutoff sweep.** "Would deciding later have helped?" across 24 hourly cutoffs, flagging cutoffs whose coverage is incomplete.
+  - **Track-record backtest.** "Was the recent track record a useful guide?" Compares each day's track record with how that day turned out, and backtests a naive "subtract the recent bias" adjustment. Nothing used is published after the cutoff.
   - **Also included:** comparison-rule sensitivity and hour-of-day bias.
 - **Data & method.** Source URLs, response hashes, per-day record counts, method steps and the limitations behind the numbers.
 
@@ -77,7 +80,7 @@ npm run test:e2e
 python scripts/audit.py             # independent recomputation of the default month
 ```
 
-Observed for the second pass, locally: **37 Python tests and 12 browser tests pass**, the strict TypeScript build passes and the independent audit reproduces the baseline numbers exactly. Browser tests start and stop their own backend on port 8000, so stop any local server first. No tests are skipped. Starlette's TestClient emits one deprecation warning; it does not fail the tests.
+Observed for the current working tree, locally: **42 Python tests and 13 browser tests pass**, the strict TypeScript build passes and the independent audit reproduces the baseline numbers exactly. Browser tests start and stop their own backend on port 8000, so stop any local server first. No tests are skipped. Starlette's TestClient emits one deprecation warning; it does not fail the tests.
 
 **Python tests cover:**
 - inclusive publication boundaries and exclusion of future versions
@@ -87,6 +90,7 @@ Observed for the second pass, locally: **37 Python tests and 12 browser tests pa
 - percentile definitions
 - earlier-run selection: always older than the chosen run, never after the cutoff
 - the real early-cutoff coverage gap and the cutoff sweep
+- the track record: complete days only, an actual published one minute after the cutoff is excluded, the inclusive boundary, and every real track-record actual published by the cutoff
 - validation and 422 messages
 - CSV privacy and filenames
 - all 31 delivery days at seven cutoff scenarios
@@ -138,13 +142,14 @@ Neither rule is semantically established, and similar sensitivity results do not
 
 The official Elexon wind page directly compares WINDFOR with Generation by Fuel Type outturn. That supports the intended comparison but does not establish a unit-level fleet reconciliation. Scope is visible/operationally metered GB transmission wind, **not all embedded wind or total UK wind**.
 
-Actuals use the latest publishTime returned per startTime in the fixed snapshot. They are retrospective, not claimed to have been available at the purchase cutoff. This response has one row per actual startTime and no revisions, which does not prove historical revisions never existed. Exact duplicate observations are deduplicated; conflicting generation at identical keys raises an error rather than silently picking one.
+Actuals use the latest publishTime returned per startTime in the fixed snapshot. In hindsight views they are retrospective and not claimed to have been available at the purchase cutoff. The decision-time track record is the one exception, and it is gated: it uses only past delivery days whose actual rows carry a `publishTime` at or before the cutoff. FUELHH rows in this snapshot were published 30–145 minutes after each half-hour began. This response has one row per actual startTime and no revisions, which does not prove historical revisions never existed. Exact duplicate observations are deduplicated; conflicting generation at identical keys raises an error rather than silently picking one.
 
 ### Metrics
 
 - **Sign convention.** Error is forecast minus actual, so positive bias means over-forecast.
 - **What is reported.** MAE, bias, RMSE and the largest absolute error use paired hours only and always report n. Empty samples give null, never zero.
 - **Shortfall percentiles.** These are empirical P10/P50/P90 of signed error and P50/P90 of absolute error, using linear interpolation between ranks (numpy's default), plus the share of over-forecast hours. They describe January at one cutoff; they are **not** a calibrated interval, and none of them appears in the decision view.
+- **Track record.** For a decision at cutoff C on day D, the window is the up to seven most recent earlier purchase days whose delivery-day actuals were *all* published at or before C on D. Each day is scored against the forecast selected at C on its own purchase day. Incomplete days are skipped rather than averaged, because a part-reported day would over-represent the night. The snapshot holds one version per actual half-hour; if that version was published after C, the half-hour counts as missing even if an earlier version may have existed.
 - **MAPE.** Omitted because it is unstable at low wind.
 
 ### Snapshot findings
@@ -163,6 +168,10 @@ Actuals use the latest publishTime returned per startTime in the fixed snapshot.
 - **Headline metrics.** 744 pairs, MAE 2,013.01 MW, signed bias +1,729.93 MW, RMSE 2,505.94 MW. First-half-hour comparison gives MAE 1,995.57 MW and bias +1,727.98 MW.
 - **Shortfall percentiles.** 84% of hours were over-forecast. The 90th percentile of signed error is 4,144 MW, the median absolute error 1,608 MW and the 10th percentile −489 MW.
 - **Five worst days.** Delivery 28, 12, 11, 21 and 27 January. Every hour of those days was over-forecast (MAE equals bias).
+
+**Track-record backtest (09:30, hourly mean, 29 purchase days with a track record, 696 hours).**
+- **Not predictive day to day.** The correlation between the trailing seven-day bias and that day's bias is −0.40; for MAE it is −0.52. A poor week did not foreshadow a poor next day. The windows overlap and n is small, so this is weak evidence either way.
+- **Bias was steady.** Subtracting the trailing bias from every forecast would have lowered MAE from 1,969 to 1,689 MW (−14%). This is in-sample for one month, and the bias's cause is unknown, so it is a question for the client, not a recommended correction. The app never shows an adjusted forecast.
 
 **Cutoff sweep (hourly cutoffs, hourly mean).**
 - **MAE falls slowly** from about 2,070 MW (03:00) to 2,013 MW (10:00), 1,901 MW (12:00) and 1,825 MW (23:00).
@@ -186,9 +195,9 @@ Refresh intentionally replaces the snapshot. After review, commit the new respon
 - `GET /api/health`
 - `GET /api/meta`: counts, per-day provenance and the snapshot manifest.
 - `GET /api/replay?decision=2026-01-15&cutoff=11:30&rule=hour_mean&reveal=false`
-  - Returns 24 points with `forecast`, `publishTime`, `fallback` and `age_hours`, plus `coverage` and `prior_runs`.
+  - Returns 24 points with `forecast`, `publishTime`, `fallback` and `age_hours`, plus `coverage`, `prior_runs` and `track_record` (built only from actuals published at or before the cutoff).
   - With `reveal=true` it also returns `actual`, `actual_publishTimes`, `error`, `metrics` and actual coverage. With `reveal=false` these are absent.
-- `GET /api/analysis?cutoff=09:30&rule=hour_mean`: month metrics, `distribution`, rule sensitivity, per-day and per-hour metrics.
+- `GET /api/analysis?cutoff=09:30&rule=hour_mean`: month metrics, `distribution`, rule sensitivity, per-day and per-hour metrics, and `track_record_check`.
 - `GET /api/cutoff-sweep?rule=hour_mean`: month MAE, bias, RMSE, paired n, forecast coverage and mean forecast age for each hourly cutoff 00:00–23:00.
 - `GET /api/export`: same parameters as replay. Returns CSV named by day, cutoff and view, e.g. `wind-replay-2026-01-15-0930-decision.csv`. Hidden actuals remain absent from the decision export.
 - `GET /docs`: generated API reference.
@@ -203,7 +212,8 @@ Refresh intentionally replaces the snapshot. After review, commit the new respon
 
 ```
 backend/engine.py              Pure domain logic: validation, per-target selection, earlier runs,
-                               actual revisions, metrics and percentiles; in-memory snapshot store
+                               actual revisions, metrics, percentiles and the publish-time-gated
+                               track record; in-memory snapshot store
 backend/app.py                 FastAPI routes, 422 mapping, CSV export, static asset serving
 frontend/main.tsx              Entry point
 frontend/App.tsx               Shell, navigation, URL-synchronised scenario, focus management
@@ -275,6 +285,7 @@ AI assistance was used in this project, as the brief permits.
   - the frontend split
   - URL state and hindsight reset
   - earlier runs, shortfall percentiles, the cutoff sweep and drill-through
+  - in a later pass, the decision-time track record and its backtest
   - styling and accessibility fixes
   - new tests and these documentation updates
 - **Review.** The author reviews and is responsible for all changes.

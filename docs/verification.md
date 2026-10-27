@@ -11,7 +11,24 @@
 
 These results apply to that commit only. The second pass does not inherit them.
 
-## Second pass (local, 27 October 2026, not yet pushed)
+## Second pass in CI
+
+Pushed to `second-pass-decision-workbench`. GitHub Actions [run 40546173350](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40546173350) on commit `8f3746b` passed every step on Python 3.12 and Ubuntu: pytest (37), the audit, the production build, Playwright (12), the Docker image build, and the container health and replay smoke. This resolves the local Docker gap noted below.
+
+## Third pass (local, 27 October 2026)
+
+- **Formatting.** A Prettier-only commit formats the frontend and browser tests; no behaviour change.
+- **`python -m pytest -q`.** 42 passed. Five new tests:
+  - synthetic complete-day track record
+  - an actual published one minute after the cutoff is excluded, and the inclusive boundary at that minute
+  - real-snapshot gating: every actual behind the 15 and 31 January track records was published by the cutoff
+  - the pinned backtest values
+  - the decision replay carrying a track record with no current-day actuals, and an unchanged export
+- **`npm run test:e2e`.** 13 passed. New: the track-record panel in the decision view, the empty state on 2 January, and the link to the Lab backtest.
+- **Other checks.** `npm run build`, `python scripts/audit.py` and Ruff (F rules) pass. Uncached full-month analysis now takes about 0.45 s locally because of the backtest, then it is cached per process; a decision-view track record takes about 13 ms.
+- **Visual inspection.** The new panels were checked at 1440, 390 and 320px with no horizontal overflow. Fixed after review: an awkward "7 of up to 7" sentence, a missing caption on the mini chart, and an inherited red accent on the backtest panel.
+
+## Second pass (local, 27 October 2026, before push)
 
 Environment: Linux container, Python 3.13, Node 22, Playwright 1.64 with a preinstalled Chromium via `PW_CHROMIUM_PATH`.
 
