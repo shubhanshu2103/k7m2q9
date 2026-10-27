@@ -15,6 +15,7 @@ import {
 import { ArrowUpRight } from "lucide-react";
 import { query, useApi, type Analysis, type Day, type Sweep } from "../api";
 import type { Scenario } from "../scenario";
+import { ErrorHeatmap } from "./ErrorHeatmap";
 import {
   COLORS,
   dateLabel,
@@ -272,6 +273,8 @@ function AnalysisBody({
           </ol>
         </div>
       </section>
+
+      <ErrorHeatmap analysis={a} worst={worstSet} openDay={openDay} />
 
       <CutoffSweep scenario={scenario} current={a} />
 

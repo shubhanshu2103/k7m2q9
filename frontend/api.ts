@@ -44,6 +44,7 @@ export type Replay = {
     actual?: number;
   };
   prior_runs: PriorRun[];
+  day_runs: string[];
   metrics?: Metrics;
   track_record: TrackRecord;
 };
@@ -85,6 +86,7 @@ export type Analysis = {
   sensitivity: Metrics & { alternate_rule: Rule };
   days: Day[];
   hourly: (Metrics & { hour: string })[];
+  grid: (number | null)[][];
   by_level: (Metrics & {
     from_mw: number;
     to_mw: number | null;
@@ -141,6 +143,20 @@ async function fetchJson<T>(path: string, signal: AbortSignal): Promise<T> {
   return r.json();
 }
 
+/** Warm the cache for paths the user is about to step through (e.g. timeline playback). */
+export async function prefetch(paths: string[], signal?: AbortSignal) {
+  await Promise.all(
+    paths
+      .filter((p) => !cache.has(p))
+      .map((p) =>
+        fetchJson(p, signal ?? new AbortController().signal).then(
+          (data) => cache.set(p, data),
+          () => undefined, // A failed prefetch just falls back to a normal load later.
+        ),
+      ),
+  );
+}
+
 type State<T> = { path: string | null; data: T | null; error: string };
 
 /**
@@ -190,3 +206,18 @@ export function useApi<T>(path: string | null) {
 
 export const query = (params: Record<string, string>) =>
   new URLSearchParams(params).toString();
+
+/** The replay URL for a scenario; shared so prefetching hits the same cache keys. */
+export const replayPath = (s: {
+  decision: string;
+  cutoff: string;
+  rule: string;
+  reveal: boolean;
+}) =>
+  "/api/replay?" +
+  query({
+    decision: s.decision,
+    cutoff: s.cutoff,
+    rule: s.rule,
+    reveal: String(s.reveal),
+  });

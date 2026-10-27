@@ -275,3 +275,23 @@ def test_snapshot_error_grows_with_forecast_level():
     assert sum(b["n"] for b in bands) == 744
     assert [round(b["bias"]) for b in bands] == [136, 796, 1447, 2753]
     assert bands[-1]["share_over"] == pytest.approx(0.98, abs=0.005)
+
+
+def test_day_runs_list_purchase_day_publications_only():
+    out = Store().replay("2026-01-15", "09:30")
+    times = [t[11:16] for t in out["day_runs"]]
+    assert times == ["02:30", "04:30", "07:30", "09:30", "12:25", "15:30", "18:30", "22:30"]
+    assert all(t.startswith("2026-01-15") for t in out["day_runs"])
+    # Metadata only: the values of later runs never reach the decision response.
+    assert all(p["publishTime"] <= out["cutoff"] for p in out["points"])
+    assert all(r["publishTime"] <= out["cutoff"] for r in out["prior_runs"])
+
+
+def test_analysis_grid_matches_points():
+    s = Store()
+    a = s.analysis("09:30", "hour_mean")
+    assert len(a["grid"]) == 31 and all(len(row) == 24 for row in a["grid"])
+    day = s.replay("2026-01-27", "09:30", reveal=True)
+    assert a["grid"][26] == [p["error"] for p in day["points"]]
+    early = s.analysis("01:00", "hour_mean")["grid"][0]
+    assert early[-2:] == [None, None]
