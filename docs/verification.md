@@ -18,7 +18,8 @@ Pushed to `second-pass-decision-workbench`. GitHub Actions [run 40546173350](htt
 ## Deployment (28 October 2026)
 
 - **Deployed URL.** The app is deployed on Vercel at https://k7m2q9-six.vercel.app from `main` at `684d48c`, which adds `[tool.vercel] entrypoint = "backend.app:app"`.
-- **Not verified from the authoring environment.** Its network policy blocks the host: the proxy refuses the connection, and name resolution fails. No result for the live site is claimed here.
+- **Verified live.** On 28 October 2026 the author ran both checks from their own machine against https://k7m2q9-six.vercel.app, deployed from `main` at the time: `check_deploy.py` passed 14/14 (served page and bundle, snapshot bundled, no hindsight fields, late-run and early-gap behaviour, the exact baseline month metrics, an actual-free export, 422 on invalid input), and `E2E_BASE_URL=… npx playwright test` passed 16/16.
+- **Not reachable from the authoring environment.** Its network policy blocks the host: the proxy refuses the connection, and name resolution fails. No result for the live site is claimed here.
 - **Checks to run against the live site.** `scripts/check_deploy.py` makes 14 checks: the page and bundle are served, the snapshot is bundled, the decision view has no hindsight fields, the late-run and early-gap behaviour, the baseline month metrics, an actual-free decision export, and 422 on invalid input. `E2E_BASE_URL=<url> npx playwright test` runs the browser suite against any URL. Both were validated here against a local server: 14/14 checks and 16/16 browser tests pass.
 
 ## Fifth pass (local, 27 October 2026)
