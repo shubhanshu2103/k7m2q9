@@ -111,7 +111,7 @@ Environment: Linux container, Python 3.13, Node 22, Playwright 1.64 with a prein
 - **Docker for the second pass.** A Docker daemon was available, but `docker build` failed twice because Docker Hub returned `429 Too Many Requests` for `node:22-alpine`. The Dockerfile is unchanged since the passing CI run; the new frontend files sit inside the already-copied `frontend/` directory. It is still not verified until a build and run pass.
 - **CI on the second pass.** Not run: nothing has been pushed.
 - **Deployment.** Vercel/Heroku deployment and plan compatibility have not been attempted, and there is no deployed URL.
-- **Submission tasks.** The YouTube demo, form submission and incognito checks of the submitted URLs are outstanding.
+- **Submission tasks.** The demo video is published unlisted at https://youtu.be/XFjAYD9G47o; the author checked playback while signed in. Logged-out access, the form submission and private-window checks of every submitted URL are outstanding. The authoring environment cannot reach YouTube.
 - **Semantics.** WINDFOR within-hour semantics, real dissemination latency, and the cause of the persistent positive bias are all unresolved.
 - **Fleet.** Unit-level forecast/outturn fleet reconciliation is not established.
 - **Wider review.** No cross-browser matrix (Chromium only), formal accessibility audit, screen-reader test, or production load/security review has been done.
