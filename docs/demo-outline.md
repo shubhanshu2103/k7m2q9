@@ -1,6 +1,6 @@
-# Demo script (not a video)
+# Demo script
 
-A recordable script for the two-part video: each part at most 5 minutes, 10 minutes in total. Recording, upload and submission are still to do; do not describe this file as a completed demo.
+The script used for the two-part video: each part at most 5 minutes, 10 minutes in total. The recorded video is at https://youtu.be/XFjAYD9G47o (unlisted).
 
 Spoken lines are in quotes: about 530 words in Part 1 (about 3.8 minutes at a calm 140 words per minute) and about 390 in Part 2 (about 2.8 minutes, leaving time to show code and run the tests). Times are targets, not limits; cut the *optional* lines if a part runs long.
 
