@@ -1,16 +1,19 @@
 # Wind replay
 
+**Live app: https://k7m2q9-six.vercel.app**
+
 A January 2026 wind-forecast workbench for a UK day-ahead purchasing team. It answers two questions from the brief using only Elexon national wind data: *what wind forecast could the team actually see when it decided?* and *how wrong were those forecasts, quantitatively?* React + TypeScript, Python + FastAPI, Docker, and an immutable Elexon snapshot.
 
-**Status (27 October 2026):**
+**Status (28 October 2026):**
 
 - **Repository.** Public at https://github.com/shubhanshu2103/k7m2q9.
 - **First version.** GitHub Actions passed for commit `5276489`: [run 40538346465](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40538346465). That run covered pytest, the production build, Playwright, and a Docker image build with a container health/replay smoke.
 - **Second pass.** Pushed to branch `second-pass-decision-workbench`; GitHub Actions passed every step for commit `8f3746b`, including the Docker build and container smoke: [run 40546173350](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40546173350). `main` still points at the first version.
 - **Third pass.** The decision-time track record and its backtest. Pushed; GitHub Actions passed every step for commit `58c2327`: [run 40549449242](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40549449242).
 - **Fourth pass.** Error by forecast level, a key findings summary, and enforced lint, formatting and locked Python dependencies. Merged into `main` through [shubhanshu2103/k7m2q9#3](https://github.com/shubhanshu2103/k7m2q9/pull/3); CI passed on `main` ([run 40551629743](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40551629743)).
-- **Fifth pass.** The cutoff timeline with playback, and the month heatmap. Verified locally (see [Verify](#verify)); CI runs once it is pushed.
-- **Still pending.** Vercel/Heroku deployment: **no deployed application link exists yet**. Also pending: the demo video and the form submission.
+- **Fifth pass.** The cutoff timeline with playback, and the month heatmap. Merged into `main` through [shubhanshu2103/k7m2q9#4](https://github.com/shubhanshu2103/k7m2q9/pull/4), with CI passing on `main`.
+- **Deployment.** Deployed on Vercel at https://k7m2q9-six.vercel.app, using `[tool.vercel] entrypoint = "backend.app:app"` in `pyproject.toml`. Check it with `python scripts/check_deploy.py https://k7m2q9-six.vercel.app` (see [Deployment](#deployment-and-submission)).
+- **Still pending.** The demo video and the form submission.
 
 ## Product
 
@@ -256,6 +259,7 @@ scripts/audit.py               Independent numerical cross-check
 scripts/smoke.sh               Local one-origin smoke check
 scripts/measure.py             Microbenchmark (no external requests)
 scripts/verify_visual.mjs      Reproducible desktop/mobile screenshot capture
+scripts/check_deploy.py        Smoke-check any running deployment against the documented numbers
 data/wind.json                 Raw WINDFOR stream response
 data/actual.json               Raw FUELHH WIND stream response
 data/manifest.json             Queries, retrieval time, counts and hashes
@@ -269,7 +273,7 @@ docs/verification.md           Observed checks and remaining unverified areas
 Dockerfile                     Multi-stage, non-root one-origin runtime
 compose.yaml                   Local container service and healthcheck
 .github/workflows/ci.yml       Lint, format, Python, audit, React build, browser and Docker CI checks
-playwright.config.js           Browser test runner; optional PW_CHROMIUM_PATH
+playwright.config.js           Browser test runner; optional PW_CHROMIUM_PATH and E2E_BASE_URL
 package.json, package-lock.json      Frontend scripts and locked dependency graph
 requirements*.txt              Direct Python dependencies (runtime, and dev tools)
 constraints.txt                Full resolved Python dependency set, used by CI and Docker
@@ -300,17 +304,23 @@ The brief requires:
 - an unlisted YouTube video of at most 10 minutes: a customer overview and a technical walkthrough of at most five minutes each
 - form submission
 
-**Deployed application link: pending, not yet deployed.** There is no placeholder URL. The video and form submission are also pending.
+**Deployed application: https://k7m2q9-six.vercel.app** (Vercel). The video and form submission are still pending.
 
-**Candidate route: Vercel (not yet verified).** Heroku no longer has a free tier, so Vercel's Hobby plan is the likely no-cost option. This environment's network policy blocks `vercel.com`, so the points below come from search-result summaries of Vercel's FastAPI guide and Python runtime docs, not from reading them directly:
+To check a deployment against the documented behaviour, run either of these from any machine with internet access:
+
+```sh
+python scripts/check_deploy.py https://k7m2q9-six.vercel.app            # 14 API and page checks, standard library only
+E2E_BASE_URL=https://k7m2q9-six.vercel.app npx playwright test           # the full browser suite, no local server
+```
+
+The authoring environment's network policy blocks `vercel.app`, so these checks have been run there only against a local server (all pass). Run them against the live URL before submission.
+
+**Why Vercel.** Heroku no longer has a free tier, so Vercel's Hobby plan was the no-cost option. The points below come from search-result summaries of Vercel's FastAPI guide and Python runtime docs:
 - **Entrypoint.** Vercel detects a FastAPI instance named `app` in a recognised entry file (such as `app.py`, `index.py` or `main.py` at the root or under `api/`, `app/` or `src/`), or in the module set by `tool.vercel.entrypoint` in `pyproject.toml`. Our app lives at `backend.app:app`.
 - **Static assets.** These are served from `public/` by Vercel's CDN.
 - **Python.** 3.12 is the default runtime.
 
-Open questions to settle against the live docs before deploying:
-- whether the Vite build runs in the same project, or `dist/` must be emitted into `public/`
-- whether `data/*.json` (about 2.5 MB) is bundled with the function
-- the function size and duration limits on Hobby
+The first two checks in `check_deploy.py` confirm that the React build is actually served by the deployment, and the snapshot checks confirm that `data/*.json` was bundled with the function.
 
 Locally, importing the app and loading the snapshot takes about 0.44 s, which is the cold-start cost to expect. Analysis and the cutoff sweep compute on first request (about 0.45 s and 1.1 s), then cache per instance.
 

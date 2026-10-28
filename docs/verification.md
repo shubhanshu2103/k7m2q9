@@ -15,6 +15,12 @@ These results apply to that commit only. The second pass does not inherit them.
 
 Pushed to `second-pass-decision-workbench`. GitHub Actions [run 40546173350](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40546173350) on commit `8f3746b` passed every step on Python 3.12 and Ubuntu: pytest (37), the audit, the production build, Playwright (12), the Docker image build, and the container health and replay smoke. This resolves the local Docker gap noted below.
 
+## Deployment (28 October 2026)
+
+- **Deployed URL.** The app is deployed on Vercel at https://k7m2q9-six.vercel.app from `main` at `684d48c`, which adds `[tool.vercel] entrypoint = "backend.app:app"`.
+- **Not verified from the authoring environment.** Its network policy blocks the host: the proxy refuses the connection, and name resolution fails. No result for the live site is claimed here.
+- **Checks to run against the live site.** `scripts/check_deploy.py` makes 14 checks: the page and bundle are served, the snapshot is bundled, the decision view has no hindsight fields, the late-run and early-gap behaviour, the baseline month metrics, an actual-free decision export, and 422 on invalid input. `E2E_BASE_URL=<url> npx playwright test` runs the browser suite against any URL. Both were validated here against a local server: 14/14 checks and 16/16 browser tests pass.
+
 ## Fifth pass (local, 27 October 2026)
 
 - **Checks.** 46 pytest and 16 Playwright pass; Ruff, Prettier and the strict build pass. New Python tests check that `day_runs` lists purchase-day publications only (no forecast values after the cutoff reach the decision response) and that the analysis `grid` matches the per-day points, including gaps at a 01:00 cutoff.
