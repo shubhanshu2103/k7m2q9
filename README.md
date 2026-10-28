@@ -12,7 +12,7 @@ A January 2026 wind-forecast workbench for a UK day-ahead purchasing team. It an
 - **Third pass.** The decision-time track record and its backtest. Pushed; GitHub Actions passed every step for commit `58c2327`: [run 40549449242](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40549449242).
 - **Fourth pass.** Error by forecast level, a key findings summary, and enforced lint, formatting and locked Python dependencies. Merged into `main` through [shubhanshu2103/k7m2q9#3](https://github.com/shubhanshu2103/k7m2q9/pull/3); CI passed on `main` ([run 40551629743](https://github.com/shubhanshu2103/k7m2q9/actions/runs/40551629743)).
 - **Fifth pass.** The cutoff timeline with playback, and the month heatmap. Merged into `main` through [shubhanshu2103/k7m2q9#4](https://github.com/shubhanshu2103/k7m2q9/pull/4), with CI passing on `main`.
-- **Deployment.** Deployed on Vercel at https://k7m2q9-six.vercel.app, using `[tool.vercel] entrypoint = "backend.app:app"` in `pyproject.toml`. Check it with `python scripts/check_deploy.py https://k7m2q9-six.vercel.app` (see [Deployment](#deployment-and-submission)).
+- **Deployment.** Deployed on Vercel at https://k7m2q9-six.vercel.app. `pyproject.toml` sets `[tool.vercel] entrypoint = "backend.app:app"` and a `[project]` section that declares the runtime dependencies (FastAPI, Uvicorn) and Python ≥ 3.12 for Vercel. Keep those versions in step with `requirements.txt`. Check it with `python scripts/check_deploy.py https://k7m2q9-six.vercel.app` (see [Deployment](#deployment-and-submission)).
 - **Still pending.** The demo video and the form submission.
 
 ## Product
