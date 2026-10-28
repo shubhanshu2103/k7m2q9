@@ -313,7 +313,7 @@ python scripts/check_deploy.py https://k7m2q9-six.vercel.app            # 14 API
 E2E_BASE_URL=https://k7m2q9-six.vercel.app npx playwright test           # the full browser suite, no local server
 ```
 
-The authoring environment's network policy blocks `vercel.app`, so these checks have been run there only against a local server (all pass). Run them against the live URL before submission.
+**Verified live on 28 October 2026**, run by the author from their own machine: `check_deploy.py` passed 14/14 and the browser suite 16/16 against https://k7m2q9-six.vercel.app. The authoring environment cannot reach `vercel.app`, so it validated both only against a local server.
 
 **Why Vercel.** Heroku no longer has a free tier, so Vercel's Hobby plan was the no-cost option. The points below come from search-result summaries of Vercel's FastAPI guide and Python runtime docs:
 - **Entrypoint.** Vercel detects a FastAPI instance named `app` in a recognised entry file (such as `app.py`, `index.py` or `main.py` at the root or under `api/`, `app/` or `src/`), or in the module set by `tool.vercel.entrypoint` in `pyproject.toml`. Our app lives at `backend.app:app`.
